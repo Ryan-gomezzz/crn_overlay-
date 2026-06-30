@@ -384,7 +384,7 @@ python agents/train_ppo.py
 
 | Member | Responsibilities |
 |---------|------------------|
-| Ryan | Project Lead, System Model, Repository Architecture, Gymnasium Integration, Final Integration |
+| Ryan |System Model, Repository Architecture, Gymnasium Integration, Final Integration |
 | Sneha | Wireless Channel Models, Rayleigh Fading, Path Loss, Noise Model |
 | Shreya | Relay Protocol, SINR, Time Slot Logic, Interference Model |
 | Aditya | RL Algorithms, Stable Baselines3 Integration, Training & Evaluation |
