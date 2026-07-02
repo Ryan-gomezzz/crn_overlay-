@@ -1,21 +1,62 @@
 # Master Configuration File
+
+algorithm:
+  name: OVERLAY_CAMO_TD3  # Supported options: TD3, CAMO_TD3, OVERLAY_CAMO_TD3
+
 simulation:
-  # General simulation settings
+  seed: 42
+  time_steps_per_episode: 100
 
 network:
-  # Network topology and coordinates
+  pt_coords: [0.0, 0.0]
+  pr_coords: [100.0, 0.0]
+  sus_coords: [10.0, 20.0]
+  sur_coords: [50.0, 10.0]
+  sud_coords: [90.0, 20.0]
+  p_primary: 30.0   # Primary user power in dBm
+  p_max_su: 20.0    # SUs and SUR max power in dBm
 
 channel:
-  # Path loss exponent, fading parameters
+  path_loss_exponent: 3.0
+  noise_power_dbm: -114.0
+  fading_type: rayleigh
 
 training:
-  # RL hyperparameters
+  gamma: 0.99
+  tau: 0.005
+  policy_delay: 2
+  exploration_noise: 0.1
+  policy_noise: 0.2
+  noise_clip: 0.5
+  batch_size: 128
+  lr_actor: 0.0003
+  lr_critic: 0.0003
+  buffer_size: 100000
+  total_steps: 10000
+  start_steps: 1000  # Number of steps with uniform random actions before training begins
+
+camo_td3:
+  history_length: 10
+  decoding_threshold: 1.0
+  pu_rate_threshold: 1.5   # Rate target for primary user (bps/Hz)
+  interference_limit_dbm: -50.0   # Limit in dBm for SUs interference to PR
+  energy_limit_watts: 0.1         # Max power average limit (Watts)
+  penalty_coef_inf: 10.0          # Scaling for standard TD3 interference penalty
+  penalty_coef_nrg: 10.0          # Scaling for standard TD3 energy penalty
+  lr_lambda: 0.001                # Lagrangian learning rate
+  lambda_inf_init: 0.1
+  lambda_qos_init: 0.1            # QoS Lagrangian initial value for OVERLAY_CAMO_TD3
+  lambda_nrg_init: 0.1
+  lambda_clamp_max: 50.0
+  eta_explore_init: 0.05
+  eta_explore_decay: 0.9999
 
 logging:
-  # TensorBoard/WandB settings
+  tensorboard_enabled: true
+  log_interval: 10
+  log_dir: experiments/runs/
 
 evaluation:
-  # Evaluation episodes, metrics
-
-environment:
-  # State space, action space definitions
+  eval_episodes: 5
+  eval_interval: 500
+  save_dir: experiments/checkpoints/
