@@ -1,0 +1,21 @@
+# Master Configuration File
+simulation:
+  # General simulation settings
+
+network:
+  # Network topology and coordinates
+
+channel:
+  # Path loss exponent, fading parameters
+
+training:
+  # RL hyperparameters
+
+logging:
+  # TensorBoard/WandB settings
+
+evaluation:
+  # Evaluation episodes, metrics
+
+environment:
+  # State space, action space definitions

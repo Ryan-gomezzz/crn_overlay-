@@ -1,0 +1,34 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Logs
+logs/
+*.log
+
+# Experiment outputs
+experiments/runs/
+experiments/logs/
+experiments/checkpoints/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
