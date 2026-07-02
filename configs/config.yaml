@@ -1,21 +1,58 @@
-# Master Configuration File
+# =============================================================================
+# CRN-RL Framework Master Configuration
+# =============================================================================
+
 simulation:
-  # General simulation settings
+  seed: 42
+  max_steps: 200
+  num_episodes: 1000
 
 network:
-  # Network topology and coordinates
+  # Distances in meters
+  d_pt_pr: 100.0
+  d_pt_relay: 50.0
+  d_su_relay: 30.0
+  d_relay_pr: 60.0
+  d_relay_sud: 40.0
+  d_su_sud: 70.0
+  d_pt_sud: 90.0
+  # Power constraints in Watts
+  p_max_su: 1.0
+  p_max_relay: 1.0
+  p_pt: 1.0
 
 channel:
-  # Path loss exponent, fading parameters
+  model: "rayleigh"          # Sneha will implement
+  path_loss_exponent: 3.0    # Sneha will implement
+  noise_power: 1.0e-10
+  bandwidth: 1.0e6
 
 training:
-  # RL hyperparameters
+  algorithm: "DQN"
+  total_timesteps: 100000
+  learning_rate: 0.001
+  batch_size: 64
+  gamma: 0.99
+  buffer_size: 50000
+  exploration_fraction: 0.1
+  target_update_interval: 1000
 
 logging:
-  # TensorBoard/WandB settings
+  tensorboard: true
+  tensorboard_log_dir: "experiments/tensorboard"
+  wandb: false
+  wandb_project: "crn-overlay-rl"
+  log_interval: 10
+  save_interval: 5000
 
 evaluation:
-  # Evaluation episodes, metrics
+  num_episodes: 100
+  deterministic: true
+  save_results: true
+  results_dir: "experiments/results"
 
 environment:
-  # State space, action space definitions
+  interference_threshold: 0.1
+  penalty_weight: 10.0
+  num_channels: 6
+  render_mode: null
