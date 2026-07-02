@@ -95,7 +95,7 @@ def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> d
     return avg_metrics
 
 
-def main():
+def main_legacy():
     """
     Load configuration, setup environment, and run the pipeline.
     """
@@ -245,6 +245,20 @@ def main():
     if writer:
         writer.close()
     print("Training pipeline finished successfully.")
+
+
+def main():
+    import sys
+    if len(sys.argv) == 1:
+        # Run legacy training flow
+        main_legacy()
+    else:
+        # Run CLI flow
+        from cli.parser import get_parser
+        from cli.runner import execute_cli
+        parser = get_parser()
+        args = parser.parse_args()
+        execute_cli(args)
 
 
 if __name__ == "__main__":
