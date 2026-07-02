@@ -2,24 +2,18 @@
 **Assignee:** Sneha
 
 ## Objectives
-Implement realistic wireless channel models including Rayleigh fading, path loss, distance models, and noise.
+Implement Rayleigh channel gain models, path loss, distance attenuation models, and complex noise.
 
-## Files to modify
+## Files to modify/maintain
 - `simulator/channels.py`
 - `simulator/propagation.py`
-- `tests/test_channels.py`
+- `tests/test_camo.py`
 
 ## Expected Classes and Functions
-- `class WirelessChannel(Protocol)`
-- `class RayleighFading(WirelessChannel)`
-- `def calculate_path_loss(distance: float) -> float`
-
-## APIs
-- The channel objects should accept parameters like distance, frequency, and output channel gains.
-
-## Coding Standards
-- Google docstrings, type hints (Python 3.11+).
+- `class RayleighFading`
+- `def calculate_path_loss(distance: float, path_loss_exponent: float) -> float`
 
 ## Testing Checklist
-- Test channel gain variance matches expected Rayleigh distribution.
-- Test path loss decreases monotonically with distance.
+- Run Rayleigh fading generator and verify envelope statistical gains.
+- Verify path loss decreases monotonically as distance increases.
+- Run `tests/test_camo.py` to check physical layers math constraints.
