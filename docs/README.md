@@ -16,8 +16,8 @@ This directory contains technical guides, system models, mathematical derivation
 *   [development_roadmap.md](file:///d:/Mini%20Project/crn_overlay-/docs/development_roadmap.md) — Feature progression and submission schedule.
 
 ### RL Agent Documentation
-*   [agents/T3.md](file:///d:/Mini%20Project/crn_overlay-/docs/agents/T3.md) — Twin Delayed DDPG baseline implementation details.
-*   [agents/UNDERLAY_TD3.md](file:///d:/Mini%20Project/crn_overlay-/docs/agents/UNDERLAY_TD3.md) — Adaption of the original CAMO-TD3 underlay limits agent.
+*   [agents/TD3.md](file:///d:/Mini%20Project/crn_overlay-/docs/agents/TD3.md) — Twin Delayed DDPG baseline implementation details.
+*   [agents/UNDERLAY_TD3.md](file:///d:/Mini%20Project/crn_overlay-/docs/agents/UNDERLAY_TD3.md) — Adaption of the original Underlay TD3 underlay limits agent.
 *   [agents/OVERLAY_TD3.md](file:///d:/Mini%20Project/crn_overlay-/docs/agents/OVERLAY_TD3.md) — Design and equations of the new cooperative Overlay TD3 agent.
 
 ### Benchmarking & Comparison

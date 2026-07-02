@@ -3,8 +3,8 @@
 
 ## Objectives
 Implement and optimize RL training, evaluation, and comparative benchmarking scripts for the three supported agents:
-*   **T3** (Twin Delayed DDPG Baseline)
-*   **Underlay TD3** (Adaption of original CAMO-TD3 limits)
+*   **TD3** (Twin Delayed DDPG Baseline)
+*   **Underlay TD3** (Adaption of original Underlay TD3 limits)
 *   **Overlay TD3** (Relay and QoS-aware cooperative agent)
 
 ## Files to modify/maintain

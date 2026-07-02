@@ -11,14 +11,14 @@ from typing import Dict, List, Any, Optional
 # Premium color palette
 COLORS = {
     "TD3": "#e74c3c",          # Crimson Red
-    "CAMO_TD3": "#3498db",     # Vibrant Blue
-    "OVERLAY_CAMO_TD3": "#2ecc71" # Emerald Green
+    "UNDERLAY_TD3": "#3498db", # Vibrant Blue
+    "OVERLAY_TD3": "#2ecc71"   # Emerald Green
 }
 
 SHORT_NAMES = {
-    "TD3": "T3",
-    "CAMO_TD3": "Underlay TD3",
-    "OVERLAY_CAMO_TD3": "Overlay TD3"
+    "TD3": "TD3",
+    "UNDERLAY_TD3": "Underlay TD3",
+    "OVERLAY_TD3": "Overlay TD3"
 }
 
 def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, Any]]:
@@ -28,9 +28,12 @@ def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, A
     if not os.path.exists(agent_dir):
         # Check standard folder mapping just in case
         folder_map = {
-            "TD3": "t3",
+            "TD3": "td3",
+            "UNDERLAY_TD3": "underlay_td3",
+            "OVERLAY_TD3": "overlay_td3",
             "CAMO_TD3": "underlay_td3",
-            "OVERLAY_CAMO_TD3": "overlay_td3"
+            "OVERLAY_CAMO_TD3": "overlay_td3",
+            "T3": "td3"
         }
         agent_dir = os.path.join(experiments_dir, folder_map.get(agent, agent.lower()))
 
@@ -54,7 +57,7 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str):
     os.makedirs(output_plots_dir, exist_ok=True)
     
     # Load all metrics
-    agents = ["TD3", "CAMO_TD3", "OVERLAY_CAMO_TD3"]
+    agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     metrics_by_agent = {}
     for agent in agents:
         metrics_by_agent[agent] = load_metrics_for_agent(experiments_dir, agent)
@@ -173,14 +176,14 @@ def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, "research_report.md")
     
-    agents = ["TD3", "CAMO_TD3", "OVERLAY_CAMO_TD3"]
+    agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     metrics_by_agent = {}
     for agent in agents:
         metrics_by_agent[agent] = load_metrics_for_agent(experiments_dir, agent)
         
     with open(report_path, "w") as f:
         f.write("# CRN Reinforcement Learning Framework: Experimental Report\n\n")
-        f.write("This report compiles performance and convergence metrics for standard **T3** (TD3), **Underlay TD3** (CAMO-TD3), and **Overlay TD3** (Overlay-CAMO-TD3) under Rayleigh fading constraints.\n\n")
+        f.write("This report compiles performance and convergence metrics for standard **TD3**, **Underlay TD3**, and **Overlay TD3** under Rayleigh fading constraints.\n\n")
         
         f.write("## 1. Benchmarking Summary Table\n\n")
         f.write("| Algorithm | Mean Return | Best Seed Return | SU Throughput (bps/Hz) | PU Outage Rate | Training Time (s) | Avg Inf. Time (ms) |\n")
@@ -216,7 +219,7 @@ def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
             )
             
         f.write("\n## 2. Convergence Analysis\n\n")
-        f.write("The convergence plots reflect the policy return trends across different seeds. Standard memoryless T3 agents typically exhibit higher variance and outages due to the lack of history modeling. Recurrent Underlay and Overlay structures leverage temporal state representation to adapt to fading fluctuations.\n\n")
+        f.write("The convergence plots reflect the policy return trends across different seeds. Standard memoryless TD3 agents typically exhibit higher variance and outages due to the lack of history modeling. Recurrent Underlay and Overlay structures leverage temporal state representation to adapt to fading fluctuations.\n\n")
         
         # Reference generated charts
         f.write("### Policy Convergence\n")
@@ -278,7 +281,7 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
         story.append(Paragraph("CRN Reinforcement Learning Framework: Experimental Report", title_style))
         story.append(Spacer(1, 10))
         
-        intro_text = "This report compiles performance and convergence metrics for standard T3, Underlay TD3, and Overlay TD3 under Rayleigh fading constraints. It is compiled automatically by the research framework CLI."
+        intro_text = "This report compiles performance and convergence metrics for standard TD3, Underlay TD3, and Overlay TD3 under Rayleigh fading constraints. It is compiled automatically by the research framework CLI."
         story.append(Paragraph(intro_text, body_style))
         story.append(Spacer(1, 15))
         
@@ -288,7 +291,7 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
         # Simple summary table template
         table_data = [
             ["Algorithm", "Throughput (bps/Hz)", "PU Outage", "Avg Return"],
-            ["T3 Baseline", "TBD", "TBD", "TBD"],
+            ["TD3", "TBD", "TBD", "TBD"],
             ["Underlay TD3", "TBD", "TBD", "TBD"],
             ["Overlay TD3", "TBD", "TBD", "TBD"]
         ]

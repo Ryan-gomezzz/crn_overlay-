@@ -1,6 +1,6 @@
-# Underlay TD3 (Original CAMO-TD3 adaptation)
+# Underlay TD3 (Original Underlay TD3 adaptation)
 
-**Underlay TD3** is a faithful implementation of the original CAMO-TD3 algorithm adapted to run in the Overlay Cognitive Radio Network environment.
+**Underlay TD3** is a faithful implementation of the original Underlay TD3 algorithm adapted to run in the Overlay Cognitive Radio Network environment.
 
 ---
 
@@ -38,5 +38,5 @@ $$a_{explore} = \text{clip}\left( \pi_\theta(b_t) + \mathcal{N}(0, \sigma^2) + \
 ---
 
 ## 3. Intended Use & Application
-*   **Purpose**: Serves as a standard baseline showing the performance of CAMO-TD3 when operating under traditional physical underlay power limitations.
+*   **Purpose**: Serves as a standard baseline showing the performance of Underlay TD3 when operating under traditional physical underlay power limitations.
 *   **Usage Context**: Should be used when co-channel interference power limit bounds at the Primary Receiver (PR) are the main safety metric, and the agent does not receive cooperative state metrics from the relay node.

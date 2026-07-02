@@ -50,7 +50,7 @@ def validate_yaml_config(config_path: str = "configs/config.yaml") -> tuple[bool
 
     # Value constraints
     if "algorithm" in config and "name" in config["algorithm"]:
-        valid_algos = ["TD3", "CAMO_TD3", "OVERLAY_CAMO_TD3"]
+        valid_algos = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
         if config["algorithm"]["name"] not in valid_algos:
             errors.append(f"Invalid algorithm name: '{config['algorithm']['name']}'. Choose from: {valid_algos}")
 
@@ -141,7 +141,7 @@ def run_all_tests() -> int:
 
     # 3. Agent Smoke Tests
     print("\n[3/3] Running Agent Smoke Tests (5-step training runs)...")
-    smoke_algos = ["TD3", "CAMO_TD3", "OVERLAY_CAMO_TD3"]
+    smoke_algos = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     smoke_results = {}
     for algo in smoke_algos:
         print(f"  Testing {algo}...")

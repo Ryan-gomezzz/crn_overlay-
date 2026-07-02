@@ -53,7 +53,7 @@ The repository supports multiple Reinforcement Learning agents running on a shar
 ```mermaid
 flowchart TD
 
-A[RL Agent: T3 / Underlay TD3 / Overlay TD3]
+A[RL Agent: TD3 / Underlay TD3 / Overlay TD3]
 
 B[Gymnasium Environment]
 
@@ -85,7 +85,7 @@ G --> H
 
 ### Shared Infrastructure Overview
 *   **Environment**: A Gymnasium-compatible wrapper (`envs/crn_env.py`) managing states and coordinate matrices.
-*   **Replay Buffers**: Flat transitions buffer (used by T3) and episodic sequential buffer (used by Underlay/Overlay TD3).
+*   **Replay Buffers**: Flat transitions buffer (used by TD3) and episodic sequential buffer (used by Underlay/Overlay TD3).
 *   **Neural Networks**: Base actor and critic layouts, recurrent GRU encoders, and twin value prediction heads.
 *   **Logging & Config**: Consolidated YAML configurations and unified TensorBoard summaries.
 
@@ -95,14 +95,14 @@ G --> H
 
 The repository supports three distinct reinforcement learning agents:
 
-### 1. T3 (Twin Delayed DDPG Baseline)
+### 1. TD3 (Twin Delayed DDPG Baseline)
 A standard baseline implementation for comparison:
 *   **Twin Critics**: Mitigates target value overestimation bias by tracking the minimum of two value estimators.
 *   **Delayed Policy Updates**: Updates the actor network less frequently than the critics to ensure target stability.
 *   **Target Policy Smoothing**: Adds target noise to actions to reduce Q-value function variance.
 
-### 2. Underlay TD3 (Original CAMO-TD3 adaptation)
-Fulfills the original CAMO-TD3 design methodology:
+### 2. Underlay TD3 (Original Underlay TD3 adaptation)
+Fulfills the original Underlay TD3 design methodology:
 *   **GRU Belief Encoder**: Processes historical sequences of length $L=10$ observations and actions to tackle partial observability.
 *   **Sequence Replay Buffer**: Episode-aware sampling ensuring clean boundary tracking.
 *   **Lagrangian Constrained Optimization**: Learns softplus-parameterized multipliers $\lambda_{inf}$ and $\lambda_{nrg}$ to restrict interference power and energy.
@@ -120,8 +120,8 @@ A novel custom architecture specifically redesigned for Overlay CRNs:
 
 # 🚀 Project Features
 
-*   **Standard T3 Baseline**: Benchmark for deterministic policy gradient agents.
-*   **Underlay TD3 Agent**: Recreates the original CAMO-TD3 algorithm under standard constraints.
+*   **Standard TD3**: Benchmark for deterministic policy gradient agents.
+*   **Underlay TD3 Agent**: Recreates the original Underlay TD3 algorithm under standard constraints.
 *   **Overlay TD3 Agent**: Novel research-grade extension optimized for cooperative Decode-and-Forward networks.
 *   **Sequence Replay Buffer**: Supports flat transition indexing and sequential sampling.
 *   **GRU Belief Encoder**: Addresses Rayleigh fading partial observability.
@@ -256,7 +256,7 @@ CRN-RL-Framework/
 ├── agents/
 │   ├── models.py          # GRU Encoder, Actor, and Twin Critics
 │   ├── buffers.py         # Sequence Replay Buffers (flat/episodic/overlay)
-│   ├── train_td3.py       # Training logic for T3, Underlay TD3, Overlay TD3
+│   ├── train_td3.py       # Training logic for TD3, Underlay TD3, Overlay TD3
 │   ├── evaluate.py        # Standalone evaluation & checkpoint loader
 │   └── benchmark.py       # Comparative benchmarking automation
 │
@@ -319,7 +319,7 @@ Responsible for:
 Contains RL network models, training files, and comparative tools.
 
 Algorithms implemented:
-- **T3**
+- **TD3**
 - **Underlay TD3**
 - **Overlay TD3**
 
@@ -405,7 +405,7 @@ Use these quick examples to get started with the framework's primary commands:
 
 ```bash
 # 1. Train individual agents
-python main.py train --agent t3
+python main.py train --agent td3
 python main.py train --agent underlay
 python main.py train --agent overlay
 
@@ -430,7 +430,7 @@ The `train` subcommand allows you to train individual agents or sequences of age
 
 ### Train Individual Agents
 ```bash
-python main.py train --agent t3
+python main.py train --agent td3
 python main.py train --agent underlay
 python main.py train --agent overlay
 ```
@@ -438,10 +438,10 @@ python main.py train --agent overlay
 ### Train Multiple Agents
 To run multiple agents sequentially:
 ```bash
-python main.py train --agents t3 underlay
-python main.py train --agents t3 overlay
+python main.py train --agents td3 underlay
+python main.py train --agents td3 overlay
 python main.py train --agents underlay overlay
-python main.py train --agents t3 underlay overlay
+python main.py train --agents td3 underlay overlay
 ```
 *Note: Agents are trained sequentially under identical experimental conditions (e.g. channel fading layouts, coordinate grids) to ensure a fair and scientifically sound comparison.*
 
@@ -452,19 +452,19 @@ python main.py train --agents t3 underlay overlay
 ### Multi-Agent Benchmarks
 Benchmark runs training across the selected algorithms and automatically outputs evaluation comparisons:
 ```bash
-# Run default benchmark (T3 -> Underlay TD3 -> Overlay TD3)
+# Run default benchmark (TD3 -> Underlay TD3 -> Overlay TD3)
 python main.py benchmark
 
 # Run benchmark for a subset of algorithms
-python main.py benchmark --agents t3 overlay
+python main.py benchmark --agents td3 overlay
 python main.py benchmark --agents underlay overlay
-python main.py benchmark --agents t3 underlay
+python main.py benchmark --agents td3 underlay
 ```
 
 ### Deterministic Policy Evaluation
 Evaluate a trained model's performance over a set number of episodes:
 ```bash
-python main.py evaluate --agent t3
+python main.py evaluate --agent td3
 python main.py evaluate --agent underlay
 python main.py evaluate --agent overlay
 ```
@@ -520,8 +520,8 @@ Every key environment and training parameter can be temporarily overridden from 
 # Train Overlay TD3 with 5000 episodes and 2000 environment steps
 python main.py train --agent overlay --episodes 5000 --steps 2000 --seed 42
 
-# Train T3 with custom batch size on GPU
-python main.py train --agent t3 --batch-size 512 --device cuda
+# Train TD3 with custom batch size on GPU
+python main.py train --agent td3 --batch-size 512 --device cuda
 ```
 
 ### Episode & Step Constraints
@@ -543,7 +543,7 @@ All run files, models, and charts are stored inside the configured output direct
 
 ```text
 experiments/
-├── t3/             # Outputs for T3 Baseline runs
+├── td3/             # Outputs for TD3 runs
 ├── underlay_td3/    # Outputs for Underlay TD3 runs
 ├── overlay_td3/     # Outputs for Overlay TD3 runs
 ├── checkpoints/     # Centralized folder for latest agent model checkpoints
@@ -555,7 +555,7 @@ experiments/
 ```
 
 ### Directory Purposes
-* **Algorithm-specific folders (`t3/`, etc.)**: Store individual run parameters, checkpoints, config snapshots, and local metrics.
+* **Algorithm-specific folders (`td3/`, etc.)**: Store individual run parameters, checkpoints, config snapshots, and local metrics.
 * **`checkpoints/`**: Houses model state dictionaries (`latest.pth`) and serialized replay buffers (`latest_replay.pkl`) to support training resumption.
 * **`plots/`**: Stores figures generated by report compiling (e.g. throughput comparison, outage, and convergence).
 * **`reports/`**: Holds generated markdown (`research_report.md`) and PDF documents compiling returns and computational efficiency.
@@ -573,8 +573,8 @@ Every experiment run automatically archives:
 
 # 🔬 Research Contributions
 
-*   **T3 Implementation**: Standard twin-critic policy gradient baseline.
-*   **Underlay TD3 Agent**: Adaption of original CAMO-TD3 constraints formulation.
+*   **TD3 Implementation**: Standard twin-critic policy gradient baseline.
+*   **Underlay TD3 Agent**: Adaption of original Underlay TD3 constraints formulation.
 *   **Overlay TD3 Model**: Novel custom extension addressing partial observability and strict cooperative license constraints.
 *   **Unified Benchmarking Framework**: Direct comparative environment comparing RL agents on identical scenarios.
 
@@ -584,7 +584,7 @@ Every experiment run automatically archives:
 
 For additional design details, audit structures, and reports:
 *   [OVERLAY_CAMO_DESIGN.md](file:///d:/Mini%20Project/crn_overlay-/OVERLAY_CAMO_DESIGN.md) — Mathematical redesign derivations.
-*   [PHASE1_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of CAMO-TD3.
+*   [PHASE1_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of Underlay TD3.
 *   [PHASE2_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE2_IMPLEMENTATION_REPORT.md) — Implementation details of Overlay TD3.
 *   [IMPLEMENTATION_AUDIT_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/IMPLEMENTATION_AUDIT_REPORT.md) — Repository structural and mathematical audit.
 *   [FINAL_CHECKLIST.md](file:///d:/Mini%20Project/crn_overlay-/FINAL_CHECKLIST.md) — Verification checklist matrix.
@@ -598,7 +598,7 @@ For additional design details, audit structures, and reports:
 - [x] Mathematical System Model
 - [x] Communication Simulator
 - [x] Gymnasium Environment
-- [x] T3 Baseline Implementation
+- [x] TD3 Implementation
 - [x] Underlay TD3 Implementation
 - [x] Overlay TD3 Design & Implementation
 - [x] Performance Evaluation & Comparative Benchmarks
@@ -615,7 +615,7 @@ For additional design details, audit structures, and reports:
 | Ryan | System Model, Repository Architecture, Gymnasium Integration, Final Integration |
 | Sneha | Wireless Channel Models, Rayleigh Fading, Path Loss, Noise Model |
 | Shreya | Relay Protocol, SINR, Time Slot Logic, Interference Model |
-| Aditya | RL Algorithms, T3/Underlay/Overlay Agents, Training & Evaluation |
+| Aditya | RL Algorithms, TD3/Underlay/Overlay Agents, Training & Evaluation |
 
 ---
 

@@ -1,11 +1,11 @@
-# T3 Agent (Twin Delayed DDPG Baseline)
+# TD3 Agent (Twin Delayed DDPG Baseline)
 
-The **T3** agent is a custom implementation of the baseline Twin Delayed Deep Deterministic Policy Gradient (TD3) algorithm, adjusted for the Overlay Cognitive Radio Network environment.
+The **TD3** agent is a custom implementation of the baseline Twin Delayed Deep Deterministic Policy Gradient (TD3) algorithm, adjusted for the Overlay Cognitive Radio Network environment.
 
 ---
 
 ## 1. Algorithmic Overview
-T3 is a model-free, online actor-critic algorithm designed for continuous action spaces. It addresses the systematic overestimation bias of classic DDPG through three primary mechanisms:
+TD3 is a model-free, online actor-critic algorithm designed for continuous action spaces. It addresses the systematic overestimation bias of classic DDPG through three primary mechanisms:
 
 1.  **Twin Critics**: Maintains two independent Q-value networks ($Q_{\phi_1}, Q_{\phi_2}$). The target update utilizes the minimum of the two predictions to reduce positive bias:
     $$y_t = r_t + \gamma (1 - d_t) \min_{j=1,2} Q_{\phi_{j, target}}(s_{t+1}, a_{t+1})$$

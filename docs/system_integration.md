@@ -11,12 +11,12 @@ python main.py
 ```
 
 ### 1.1. Execution Flow
-1.  **Configuration Parsing**: `main.py` parses coordinates, coordinate limits, and algorithm choice (`T3`, `UNDERLAY_TD3`, or `OVERLAY_TD3`) from `configs/config.yaml`.
+1.  **Configuration Parsing**: `main.py` parses coordinates, coordinate limits, and algorithm choice (`TD3`, `UNDERLAY_TD3`, or `OVERLAY_TD3`) from `configs/config.yaml`.
 2.  **Environment Initialization**: Starts the Gymnasium environment and sets compute seeds.
 3.  **Agent Instantiation**: Initializes `TD3Agent` which automatically standardizes name switches and builds appropriate encoders, actors, and critics.
 4.  **Interaction Loop**:
     *   Saves transitions to the replay buffer.
-    *   Samples standard transitions (T3) or temporal sequences (Underlay/Overlay TD3).
+    *   Samples standard transitions (TD3) or temporal sequences (Underlay/Overlay TD3).
     *   Triggers dual constraints multipliers updates and safety directional explore steps.
 5.  **Periodic Evaluation & Checkpoints**: Runs deterministic evaluation and saves the best model checkpoint to `experiments/checkpoints/` if performance improves.
 

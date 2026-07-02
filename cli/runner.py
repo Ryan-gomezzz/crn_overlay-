@@ -60,53 +60,6 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
     
     return config
 
-def run_single_train(
-    agent_name: str, 
-    args: Any, 
-    seed: int, 
-    resume_checkpoint: Optional[str] = None
-) -> Dict[str, Any]:
-    """Run training for a single agent with a specific seed."""
-    # Load base configuration
-    config_path = os.path.join("configs", "config.yaml")
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    # Apply overrides
-    config = apply_overrides(config, args, agent_name)
-    config["simulation"]["seed"] = seed
-    
-    set_seed(seed)
-    
-    # Instantiate environment
-    env = OverlayCRNEnv(config)
-    env.action_space.seed(seed)
-    
-    # Device
-    device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
-    
-    agent = TD3Agent(config, device=device)
-    
-    # Setup Output Run Directory
-    timestamp = get_timestamp()
-    agent_folder = agent_name.lower().replace("camo_", "")
-    run_name = f"run_{timestamp}_seed_{seed}"
-    output_dir = getattr(args, "output-dir", args.output_dir if hasattr(args, "output_dir") else "experiments")
-    run_dir = os.path.join(output_dir, agent_folder, run_name)
-    os.makedirs(run_dir, exist_ok=True)
-    
-    # Logging text file
-    log_file_path = os.path.join(run_dir, "train.log")
-    log_file = open(log_file_path, "w")
-    
-    def log_print(msg: str):
-        print(msg)
-        log_file.write(msg + "\n")
-        log_file.flush()
-
-    log_print(f"Run directory: {run_dir}")
-    
 class DummyWriter:
     """Mock TensorBoard SummaryWriter to prevent crash when TB is disabled."""
     def add_scalar(self, name, value, step):
@@ -144,7 +97,7 @@ def run_single_train(
     
     # Setup Output Run Directory
     timestamp = get_timestamp()
-    agent_folder = agent_name.lower().replace("camo_", "")
+    agent_folder = agent_name.lower()
     run_name = f"run_{timestamp}_seed_{seed}"
     output_dir = getattr(args, "output-dir", args.output_dir if hasattr(args, "output_dir") else "experiments")
     run_dir = os.path.join(output_dir, agent_folder, run_name)
@@ -428,28 +381,70 @@ def handle_train(args: Any):
             print(f"  Worst Return: {worst_r:.2f}")
     print_footer()
 
+def find_checkpoint(output_dir: str, agent_name: str) -> Optional[str]:
+    """Find the checkpoint path matching the agent name with legacy fallbacks."""
+    ckpt_dir = os.path.join(output_dir, "checkpoints")
+    
+    # Standard names and legacy names mapping
+    legacy_map = {
+        "UNDERLAY_TD3": "CAMO_TD3",
+        "OVERLAY_TD3": "OVERLAY_CAMO_TD3",
+        "TD3": "TD3"
+    }
+    legacy_agent = legacy_map.get(agent_name, agent_name)
+    
+    # 1. Direct check in checkpoints directory
+    for name in [agent_name, legacy_agent]:
+        for suffix in ["latest.pth", "best_model.pth", "final_model.pth"]:
+            path = os.path.join(ckpt_dir, f"{name}_{suffix}")
+            if os.path.exists(path):
+                return path
+            path = os.path.join(ckpt_dir, f"{name.lower()}_{suffix}")
+            if os.path.exists(path):
+                return path
+
+    # 2. Recursive search
+    for root, _, files in os.walk(output_dir):
+        for file in files:
+            if not file.endswith(".pth"):
+                continue
+            
+            low_file = file.lower()
+            low_root = root.lower()
+            full_path = os.path.join(root, file)
+            
+            # Verify the actual checkpoint contents
+            try:
+                ckpt = torch.load(full_path, map_location="cpu")
+                algo = ckpt.get("algorithm", "")
+                mapped_algo = legacy_map.get(algo, algo)
+                if mapped_algo == agent_name:
+                    return full_path
+            except Exception:
+                pass
+            
+            # Fallback if checkpoint metadata load fails (e.g. key missing)
+            if agent_name == "TD3":
+                if "td3" in low_file and not any(x in low_file or x in low_root for x in ["underlay", "overlay", "camo"]):
+                    return full_path
+            elif agent_name == "UNDERLAY_TD3":
+                if ("underlay" in low_file or "camo" in low_file or "underlay" in low_root or "camo" in low_root) and "overlay" not in low_file and "overlay" not in low_root:
+                    return full_path
+            elif agent_name == "OVERLAY_TD3":
+                if "overlay" in low_file or "overlay" in low_root:
+                    return full_path
+                    
+    return None
+
 def handle_evaluate(args: Any):
     """Executes evaluate command."""
     print_header(f"Deterministic Evaluation: {args.agent}")
     
     # Find model checkpoint
-    output_dir = args.output_dir
-    ckpt_dir = os.path.join(output_dir, "checkpoints")
-    checkpoint_path = os.path.join(ckpt_dir, f"{args.agent}_latest.pth")
-    
-    if not os.path.exists(checkpoint_path):
-        # Fallback to recursively scanning output-dir for best model of this algorithm
-        checkpoint_path = None
-        for root, _, files in os.walk(output_dir):
-            for file in files:
-                if file.endswith("best_model.pth") and args.agent.lower().replace("camo_", "") in root.lower():
-                    checkpoint_path = os.path.join(root, file)
-                    break
-            if checkpoint_path:
-                break
+    checkpoint_path = find_checkpoint(args.output_dir, args.agent)
                 
     if not checkpoint_path or not os.path.exists(checkpoint_path):
-        print(f"Error: No checkpoint found for {args.agent} in '{output_dir}'. Train the agent first.")
+        print(f"Error: No checkpoint found for {args.agent} in '{args.output_dir}'. Train the agent first.")
         sys.exit(1)
         
     print(f"Loading checkpoint from: {checkpoint_path}")
@@ -594,31 +589,66 @@ def handle_resume(args: Any):
     print_header(f"Resuming Agent: {args.agent}")
     
     output_dir = args.output_dir
-    agent_folder = args.agent.lower().replace("camo_", "")
-    agent_dir = os.path.join(output_dir, agent_folder)
+    agent_folder = args.agent.lower()
+    legacy_agent_folder = args.agent.lower().replace("underlay_", "").replace("overlay_", "")
     
     # 1. Look for run directories of this agent
     checkpoint_path = None
-    if os.path.exists(agent_dir):
-        runs = sorted(os.listdir(agent_dir))
-        # Search backwards to find the latest run containing a checkpoints/final_model.pth or similar
-        for run in reversed(runs):
-            run_path = os.path.join(agent_dir, run)
-            ckpt_dir = os.path.join(run_path, "checkpoints")
-            if os.path.exists(ckpt_dir):
-                # Prefer final_model.pth or fallback to best_model.pth or any .pth
-                if os.path.exists(os.path.join(ckpt_dir, "final_model.pth")):
-                    checkpoint_path = os.path.join(ckpt_dir, "final_model.pth")
+    
+    folder_map = {
+        "TD3": ["td3"],
+        "UNDERLAY_TD3": ["underlay_td3", "td3"],
+        "OVERLAY_TD3": ["overlay_td3"]
+    }
+    folders = folder_map.get(args.agent, [args.agent.lower()])
+    
+    legacy_map = {
+        "UNDERLAY_TD3": "CAMO_TD3",
+        "OVERLAY_TD3": "OVERLAY_CAMO_TD3",
+        "TD3": "TD3"
+    }
+    
+    for folder in folders:
+        agent_dir = os.path.join(output_dir, folder)
+        if os.path.exists(agent_dir):
+            runs = sorted(os.listdir(agent_dir))
+            # Search backwards to find the latest run containing a checkpoints/final_model.pth or similar
+            for run in reversed(runs):
+                run_path = os.path.join(agent_dir, run)
+                ckpt_dir = os.path.join(run_path, "checkpoints")
+                if os.path.exists(ckpt_dir):
+                    # Prefer final_model.pth or fallback to best_model.pth
+                    for fname in ["final_model.pth", "best_model.pth"]:
+                        path = os.path.join(ckpt_dir, fname)
+                        if os.path.exists(path):
+                            try:
+                                ckpt = torch.load(path, map_location="cpu")
+                                algo = ckpt.get("algorithm", "")
+                                mapped_algo = legacy_map.get(algo, algo)
+                                if mapped_algo == args.agent:
+                                    checkpoint_path = path
+                                    break
+                            except Exception:
+                                pass
+                if checkpoint_path:
                     break
-                elif os.path.exists(os.path.join(ckpt_dir, "best_model.pth")):
-                    checkpoint_path = os.path.join(ckpt_dir, "best_model.pth")
-                    break
+            if checkpoint_path:
+                break
                     
     # 2. Fallback to centralized checkpoints dir
     if not checkpoint_path:
         central_path = os.path.join(output_dir, "checkpoints", f"{args.agent}_latest.pth")
         if os.path.exists(central_path):
             checkpoint_path = central_path
+        else:
+            legacy_map = {
+                "UNDERLAY_TD3": "CAMO_TD3",
+                "OVERLAY_TD3": "OVERLAY_CAMO_TD3"
+            }
+            legacy_agent = legacy_map.get(args.agent, args.agent)
+            central_path = os.path.join(output_dir, "checkpoints", f"{legacy_agent}_latest.pth")
+            if os.path.exists(central_path):
+                checkpoint_path = central_path
             
     if not checkpoint_path or not os.path.exists(checkpoint_path):
         print(f"Error: Could not locate a valid checkpoint to resume training for {args.agent}.")
@@ -677,7 +707,7 @@ def handle_config(args: Any):
     print(f"  Actor Learning Rate:     {tr.get('lr_actor')}")
     print(f"  Critic Learning Rate:    {tr.get('lr_critic')}")
     
-    print("\n[Replay Buffer & Constraints (CAMO)]")
+    print("\n[Replay Buffer & Constraints (Underlay/Overlay TD3)]")
     camo = cfg.get("camo_td3", {})
     print(f"  Sequence History Length: {camo.get('history_length')}")
     print(f"  PU Rate QoS Target:      {camo.get('pu_rate_threshold')} bps/Hz")
@@ -685,8 +715,8 @@ def handle_config(args: Any):
     print(f"  Energy Limit:            {camo.get('energy_limit_watts')} Watts")
     
     print("\n[Neural Network Architectures]")
-    print("  Actor:   TD3_Actor (T3) | CAMO_Actor (Underlay / Overlay TD3)")
-    print("  Critic:  TwinCritics (3 independent pairs: Throughput, Interference, Energy)")
+    print("  Actor:   TD3_Actor (TD3) | CAMO_Actor (Underlay / Overlay TD3)")
+    print("  Critic:  TwinCritics (3 independent pairs: Throughput, Interference, Energy/QoS)")
     print("  Encoder: GRUBeliefEncoder (L=10, state dimensionality=64)")
     print_footer()
 
@@ -704,8 +734,10 @@ def handle_checkpoints(args: Any):
             if file.endswith(".pth"):
                 # Filter by agent if requested
                 if args.agent:
-                    agent_folder = args.agent.lower().replace("camo_", "")
-                    if agent_folder not in root.lower() and args.agent not in file:
+                    agent_folder = args.agent.lower()
+                    legacy_folder = args.agent.lower().replace("underlay_", "").replace("overlay_", "")
+                    legacy_agent_name = "CAMO_TD3" if args.agent == "UNDERLAY_TD3" else ("OVERLAY_CAMO_TD3" if args.agent == "OVERLAY_TD3" else args.agent)
+                    if (agent_folder not in root.lower()) and (legacy_folder not in root.lower()) and (args.agent not in file) and (legacy_agent_name not in file):
                         continue
                         
                 filepath = os.path.join(root, file)
@@ -739,7 +771,9 @@ def handle_checkpoints(args: Any):
     print_footer()
 
 SHORT_NAMES_MAP = {
-    "TD3": "T3 Baseline",
+    "TD3": "TD3",
+    "UNDERLAY_TD3": "Underlay TD3",
+    "OVERLAY_TD3": "Overlay TD3",
     "CAMO_TD3": "Underlay TD3",
     "OVERLAY_CAMO_TD3": "Overlay TD3"
 }
