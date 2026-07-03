@@ -1,3 +1,16 @@
 # Experiment-specific overrides
+# These values override the master config.yaml for specific experiments
+
+experiment:
+  name: "baseline_dqn_overlay"
+  description: "DQN agent on Overlay CRN with default channel models"
+
 simulation:
   seed: 42
+  max_steps: 200
+  num_episodes: 500
+
+training:
+  algorithm: "DQN"
+  total_timesteps: 50000
+  learning_rate: 0.0003

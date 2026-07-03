@@ -1,204 +1,410 @@
 """
-Overlay CRN System Model Integration.
+Overlay CRN System Model — full integration orchestrator.
 Author: Ryan
+
+Implements the two-time-slot Overlay Cognitive Radio Network using
+Decode-and-Forward relaying. Delegates channel generation, path loss,
+relay logic, interference, and metrics to injected protocol objects.
+
+Default stub implementations are provided so the whole pipeline runs
+end-to-end without Sneha's or Shreya's code.  When their real modules
+are ready they can be injected via the constructor.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+import math
+from typing import Any, Dict, Optional
+
 import numpy as np
 
-from .base_model import BaseSimulator
-from .channels import RayleighFading
-from .propagation import calculate_path_loss
-from .relay import DecodeAndForward
-from .interference import calculate_received_power, calculate_interference
-from .metrics import calculate_sinr, calculate_throughput, calculate_ber
-from .utils import dbm_to_watt
+from simulator.base_model import (
+    BaseSimulator,
+    ChannelModelProtocol,
+    InterferenceModelProtocol,
+    MetricsCalculatorProtocol,
+    PropagationModelProtocol,
+    RelayProtocol,
+    SimulationResult,
+    SimulationState,
+    SimulatorConfig,
+)
+
+
+# ===================================================================
+# Default stub implementations (placeholder physics)
+# ===================================================================
+
+
+class DefaultChannelModel:
+    """Generates random uniform channel gains (placeholder for Sneha)."""
+
+    def generate_channels(
+        self, rng: np.random.Generator
+    ) -> Dict[str, float]:
+        """Return uniform [0.1, 2.0] channel gains for every link."""
+        links = [
+            "pt_pr",
+            "pt_relay",
+            "su_relay",
+            "relay_pr",
+            "relay_sud",
+            "pt_sud",
+        ]
+        return {link: float(rng.uniform(0.1, 2.0)) for link in links}
+
+
+class DefaultPropagationModel:
+    """Returns unity path loss — no attenuation (placeholder for Sneha)."""
+
+    def compute_path_loss(self, distance: float) -> float:
+        """No path loss applied in the default stub."""
+        return 1.0
+
+
+class DefaultRelayModel:
+    """Always decodes successfully (placeholder for Shreya)."""
+
+    def can_decode(self, snr: float) -> bool:
+        """Relay always decodes in the default stub."""
+        return True
+
+    def forward(
+        self, channel_gain: float, power: float, noise: float
+    ) -> float:
+        """Forwards at full received power: gain * power."""
+        return channel_gain * power
+
+
+class DefaultInterferenceModel:
+    """Returns zero interference (placeholder for Shreya)."""
+
+    def compute_interference(
+        self,
+        powers: Dict[str, float],
+        gains: Dict[str, float],
+    ) -> Dict[str, float]:
+        """No interference in the default stub."""
+        return {"pr": 0.0, "sud": 0.0}
+
+
+class DefaultMetricsCalculator:
+    """Basic Shannon-capacity metrics (placeholder for Shreya)."""
+
+    def compute_sinr(
+        self, signal: float, interference: float, noise: float
+    ) -> float:
+        """SINR = signal / (interference + noise)."""
+        denom = interference + noise
+        if denom <= 0:
+            return 0.0
+        return signal / denom
+
+    def compute_throughput(self, sinr: float, bandwidth: float) -> float:
+        """Shannon capacity: log2(1 + SINR) in bits/s/Hz."""
+        if sinr <= 0:
+            return 0.0
+        return math.log2(1.0 + sinr)
+
+
+# ===================================================================
+# Overlay CRN Simulator
+# ===================================================================
 
 
 class OverlaySimulator(BaseSimulator):
+    """Overlay Cognitive Radio Network simulator with DF relaying.
+
+    The system operates in **two time-slots** per step:
+
+    **Time Slot 1** — PT transmits to PR;  SU Source transmits to Relay.
+    **Time Slot 2** — PT transmits to PR;  Relay (if decoded) forwards
+    to SU Destination.
+
+    The RL agent selects ``[p_su, p_relay]`` (normalised to [0, 1]).
+
+    Args:
+        config: Simulator configuration parameters.
+        channel_model: Generates wireless channel coefficients.
+        propagation_model: Computes distance-dependent path loss.
+        relay_model: Decode-and-Forward relay logic.
+        interference_model: Interference power calculations.
+        metrics_calculator: SINR and throughput computations.
     """
-    Implementation of the Overlay Cognitive Radio Network Simulator.
-    Integrates channel, relay, propagation, and interference modules.
-    """
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(
+        self,
+        config: Optional[SimulatorConfig] = None,
+        channel_model: Optional[ChannelModelProtocol] = None,
+        propagation_model: Optional[PropagationModelProtocol] = None,
+        relay_model: Optional[RelayProtocol] = None,
+        interference_model: Optional[InterferenceModelProtocol] = None,
+        metrics_calculator: Optional[MetricsCalculatorProtocol] = None,
+    ) -> None:
+        if config is None:
+            config = SimulatorConfig()
+        super().__init__(config)
+
+        self.channel_model: ChannelModelProtocol = (
+            channel_model or DefaultChannelModel()
+        )
+        self.propagation_model: PropagationModelProtocol = (
+            propagation_model or DefaultPropagationModel()
+        )
+        self.relay_model: RelayProtocol = (
+            relay_model or DefaultRelayModel()
+        )
+        self.interference_model: InterferenceModelProtocol = (
+            interference_model or DefaultInterferenceModel()
+        )
+        self.metrics: MetricsCalculatorProtocol = (
+            metrics_calculator or DefaultMetricsCalculator()
+        )
+
+        # Internal bookkeeping
+        self._rng: np.random.Generator = np.random.default_rng()
+        self._state: SimulationState = SimulationState()
+        self._step_count: int = 0
+
+    # ------------------------------------------------------------------
+    # BaseSimulator interface
+    # ------------------------------------------------------------------
+
+    def reset(self, seed: Optional[int] = None) -> SimulationState:
+        """Reset the simulator for a new episode.
+
+        Args:
+            seed: Optional RNG seed for reproducibility.
+
+        Returns:
+            The initial ``SimulationState``.
         """
-        Initialize the simulator components with config parameters.
-        """
-        self.config = config
+        self._rng = np.random.default_rng(seed)
+        self._step_count = 0
 
-        # Network topology coordinates
-        net_cfg = config.get("network", {})
-        self.pt_coords = np.array(net_cfg.get("pt_coords", [0.0, 0.0]))
-        self.pr_coords = np.array(net_cfg.get("pr_coords", [100.0, 0.0]))
-        self.sus_coords = np.array(net_cfg.get("sus_coords", [10.0, 20.0]))
-        self.sur_coords = np.array(net_cfg.get("sur_coords", [50.0, 10.0]))
-        self.sud_coords = np.array(net_cfg.get("sud_coords", [90.0, 20.0]))
+        # Generate fresh channel coefficients
+        channel_gains = self.channel_model.generate_channels(self._rng)
 
-        # Calculate distances
-        self.d_pt_pr = np.linalg.norm(self.pt_coords - self.pr_coords)
-        self.d_pt_sur = np.linalg.norm(self.pt_coords - self.sur_coords)
-        self.d_pt_sud = np.linalg.norm(self.pt_coords - self.sud_coords)
-        self.d_sus_sur = np.linalg.norm(self.sus_coords - self.sur_coords)
-        self.d_sus_pr = np.linalg.norm(self.sus_coords - self.pr_coords)
-        self.d_sur_pr = np.linalg.norm(self.sur_coords - self.pr_coords)
-        self.d_sur_sud = np.linalg.norm(self.sur_coords - self.sud_coords)
-
-        # Physical constants
-        chan_cfg = config.get("channel", {})
-        self.path_loss_exponent = chan_cfg.get("path_loss_exponent", 3.0)
-        self.noise_power = dbm_to_watt(chan_cfg.get("noise_power_dbm", -114.0))
-
-        # Transmit powers
-        self.p_p = dbm_to_watt(net_cfg.get("p_primary", 30.0))
-        self.p_max_su = dbm_to_watt(net_cfg.get("p_max_su", 20.0))
-
-        # Fading model and relay protocol
-        self.channel_model = RayleighFading()
-        self.relay_protocol = DecodeAndForward()
-
-        # Thresholds
-        camo_cfg = config.get("camo_td3", {})
-        self.decoding_threshold = camo_cfg.get("decoding_threshold", 1.0)
-
-        # State storage
-        self.channel_gains = {}
-
-    def _generate_channels(self):
-        """
-        Generate small-scale fading and compute total channel gains.
-        """
-        self.channel_gains = {
-            "pt_pr": self.channel_model.generate_gain(self.d_pt_pr, self.path_loss_exponent),
-            "pt_sur": self.channel_model.generate_gain(self.d_pt_sur, self.path_loss_exponent),
-            "pt_sud": self.channel_model.generate_gain(self.d_pt_sud, self.path_loss_exponent),
-            "sus_sur": self.channel_model.generate_gain(self.d_sus_sur, self.path_loss_exponent),
-            "sus_pr": self.channel_model.generate_gain(self.d_sus_pr, self.path_loss_exponent),
-            "sur_pr": self.channel_model.generate_gain(self.d_sur_pr, self.path_loss_exponent),
-            "sur_sud": self.channel_model.generate_gain(self.d_sur_sud, self.path_loss_exponent),
+        # Compute path losses for each link
+        cfg = self.config
+        distances: Dict[str, float] = {
+            "pt_pr": cfg.d_pt_pr,
+            "pt_relay": cfg.d_pt_relay,
+            "su_relay": cfg.d_su_relay,
+            "relay_pr": cfg.d_relay_pr,
+            "relay_sud": cfg.d_relay_sud,
+            "pt_sud": cfg.d_pt_sud,
+        }
+        path_losses = {
+            link: self.propagation_model.compute_path_loss(d)
+            for link, d in distances.items()
         }
 
-    def reset(self) -> Dict[str, Any]:
-        """
-        Reset channels and return initial state observation.
-        """
-        self._generate_channels()
-        # State vector: [|h_pt_pr|^2, |h_sus_sur|^2, |h_sur_sud|^2, |h_sus_pr|^2]
-        state = np.array([
-            self.channel_gains["pt_pr"],
-            self.channel_gains["sus_sur"],
-            self.channel_gains["sur_sud"],
-            self.channel_gains["sus_pr"]
-        ], dtype=np.float32)
-        return {"state": state}
-
-    def step(self, action: np.ndarray) -> Dict[str, Any]:
-        """
-        Advance simulator by one step.
-        action = [a_0, a_1] -> [power_fraction_sus, beta_power_fraction_sur]
-        """
-        # Generate new channels for this step (fading varies per step)
-        self._generate_channels()
-
-        # Parse actions
-        a_0 = float(np.clip(action[0], 0.0, 1.0))
-        a_1 = float(np.clip(action[1], 0.0, 1.0))
-
-        # Physical power levels
-        p_s1 = a_0 * self.p_max_su
-        beta = a_1
-        p_rel = self.p_max_su
-
-        # Channel gains
-        h_pt_pr = self.channel_gains["pt_pr"]
-        h_pt_sur = self.channel_gains["pt_sur"]
-        h_pt_sud = self.channel_gains["pt_sud"]
-        h_sus_sur = self.channel_gains["sus_sur"]
-        h_sus_pr = self.channel_gains["sus_pr"]
-        h_sur_pr = self.channel_gains["sur_pr"]
-        h_sur_sud = self.channel_gains["sur_sud"]
-
-        # --- TIME SLOT 1 ---
-        # PR receives from PT (signal) with interference from SUs
-        rx_pt_pr = calculate_received_power(self.p_p, h_pt_pr)
-        rx_sus_pr = calculate_received_power(p_s1, h_sus_pr)
-        sinr_pr_ts1 = calculate_sinr(rx_pt_pr, rx_sus_pr, self.noise_power)
-
-        # SUR receives from PT and SUs
-        rx_pt_sur = calculate_received_power(self.p_p, h_pt_sur)
-        rx_sus_sur = calculate_received_power(p_s1, h_sus_sur)
-        sinr_pt_sur = calculate_sinr(rx_pt_sur, rx_sus_sur, self.noise_power)
-
-        # Can the relay decode the primary signal?
-        sur_decodes_primary = self.relay_protocol.can_decode(sinr_pt_sur, self.decoding_threshold)
-
-        # Decode secondary signal at SUR (SIC of primary signal if successful)
-        if sur_decodes_primary:
-            sinr_sus_sur = calculate_sinr(rx_sus_sur, 0.0, self.noise_power)
-        else:
-            sinr_sus_sur = calculate_sinr(rx_sus_sur, rx_pt_sur, self.noise_power)
-
-        # --- TIME SLOT 2 ---
-        # SUR forwards combined signal if it successfully decodes both, otherwise it forwards nothing (or only primary)
-        # For simplicity in this base model: if SUR can decode, it forwards. Otherwise beta=0, p_rel=0.
-        sur_decodes_secondary = self.relay_protocol.can_decode(sinr_sus_sur, self.decoding_threshold)
-        
-        if sur_decodes_primary and sur_decodes_secondary:
-            p_rel_p = beta * p_rel
-            p_rel_s = (1.0 - beta) * p_rel
-        else:
-            p_rel_p = 0.0
-            p_rel_s = 0.0
-
-        # PR receives from PT and SUR in TS2
-        rx_pt_pr_ts2 = calculate_received_power(self.p_p, h_pt_pr)
-        rx_sur_pr_ts2 = calculate_received_power(p_rel_p, h_sur_pr)
-        interference_pr_ts2 = calculate_received_power(p_rel_s, h_sur_pr)
-
-        # Coherent combining of primary signal from PT and SUR
-        coherent_primary_signal = (np.sqrt(rx_pt_pr_ts2) + np.sqrt(rx_sur_pr_ts2)) ** 2
-        sinr_pr_ts2 = calculate_sinr(coherent_primary_signal, interference_pr_ts2, self.noise_power)
-
-        # SUd receives secondary signal in TS2
-        rx_sur_sud_ts2 = calculate_received_power(p_rel_s, h_sur_sud)
-        rx_pt_sud_ts2 = calculate_received_power(self.p_p, h_pt_sud)
-        interference_sud_ts2 = calculate_received_power(p_rel_p, h_sur_sud)
-
-        # SUd decodes secondary signal. The primary signals act as interference.
-        total_interference_sud = rx_pt_sud_ts2 + interference_sud_ts2
-        sinr_sud_ts2 = calculate_sinr(rx_sur_sud_ts2, total_interference_sud, self.noise_power)
-
-        # --- PERFORMANCE METRICS ---
-        rate_p = calculate_throughput(sinr_pr_ts1, time_fraction=0.5) + calculate_throughput(sinr_pr_ts2, time_fraction=0.5)
-        
-        # Secondary rate is bottlenecked by the two hops
-        rate_s1 = calculate_throughput(sinr_sus_sur, time_fraction=0.5)
-        rate_s2 = calculate_throughput(sinr_sud_ts2, time_fraction=0.5)
-        rate_s = min(rate_s1, rate_s2)
-
-        # BER at SUd
-        ber_s = calculate_ber(sinr_sud_ts2)
-
-        # Next state
-        next_state = np.array([
-            h_pt_pr,
-            h_sus_sur,
-            h_sur_sud,
-            h_sus_pr
-        ], dtype=np.float32)
-
-        return {
-            "next_state": next_state,
-            "metrics": {
-                "throughput_p": rate_p,
-                "throughput_s": rate_s,
-                "ber_s": ber_s,
-                "sinr_pr_ts1": sinr_pr_ts1,
-                "sinr_pr_ts2": sinr_pr_ts2,
-                "sinr_sud": sinr_sud_ts2,
-                "power_s1": p_s1,
-                "power_rel": p_rel,
-                "beta": beta,
-                "relay_decoded": float(sur_decodes_primary and sur_decodes_secondary),
-            }
+        # Effective gains = channel gain × path loss multiplier
+        effective_gains = {
+            link: channel_gains[link] * path_losses[link]
+            for link in channel_gains
         }
+
+        self._state = SimulationState(
+            channel_gains=channel_gains,
+            path_losses=path_losses,
+            effective_gains=effective_gains,
+            power_allocation=None,
+            su_throughput=0.0,
+            pu_throughput=0.0,
+            interference_at_pr=0.0,
+            relay_decoded=False,
+            step_count=0,
+            sinr_su=0.0,
+            sinr_pu=0.0,
+        )
+        return self._state
+
+    def step(self, action: np.ndarray) -> SimulationResult:
+        """Execute one communication round (two time-slots).
+
+        Args:
+            action: Shape ``(2,)`` array with values in ``[0, 1]``.
+                ``action[0]`` → normalised SU source power (slot 1).
+                ``action[1]`` → normalised relay power (slot 2).
+
+        Returns:
+            A ``SimulationResult`` containing the new observation,
+            reward, termination flags, and diagnostic info.
+        """
+        cfg = self.config
+        action = np.asarray(action, dtype=np.float32).flatten()
+        if action.shape[0] < 2:
+            action = np.append(action, action)
+
+        # Scale normalised actions to actual power
+        p_su = float(np.clip(action[0], 0.0, 1.0)) * cfg.p_max_su
+        p_relay = float(np.clip(action[1], 0.0, 1.0)) * cfg.p_max_relay
+        p_pt = cfg.p_pt
+        noise = cfg.noise_power
+
+        g = self._state.effective_gains
+
+        # ==============================================================
+        # Time Slot 1:  PT → PR  and  SU Source → Relay
+        # ==============================================================
+        signal_pt_pr_1 = p_pt * g.get("pt_pr", 0.0)
+        signal_su_relay = p_su * g.get("su_relay", 0.0)
+
+        # SNR at relay for decoding decision
+        snr_at_relay = signal_su_relay / noise if noise > 0 else 0.0
+        relay_decoded = self.relay_model.can_decode(snr_at_relay)
+
+        # ==============================================================
+        # Time Slot 2:  PT → PR  and  Relay → SU Dest (if decoded)
+        # ==============================================================
+        signal_pt_pr_2 = p_pt * g.get("pt_pr", 0.0)
+
+        if relay_decoded:
+            signal_relay_sud = self.relay_model.forward(
+                g.get("relay_sud", 0.0), p_relay, noise
+            )
+        else:
+            signal_relay_sud = 0.0
+
+        # Combined PU signal (simple average over two slots)
+        signal_pu = 0.5 * (signal_pt_pr_1 + signal_pt_pr_2)
+
+        # ==============================================================
+        # Interference
+        # ==============================================================
+        powers: Dict[str, float] = {
+            "su": p_su,
+            "relay": p_relay if relay_decoded else 0.0,
+            "pt": p_pt,
+        }
+        interference = self.interference_model.compute_interference(
+            powers, g
+        )
+        interference_at_pr = interference.get("pr", 0.0)
+        interference_at_sud = interference.get("sud", 0.0)
+
+        # ==============================================================
+        # Metrics
+        # ==============================================================
+        sinr_pu = self.metrics.compute_sinr(
+            signal_pu, interference_at_pr, noise
+        )
+        sinr_su = self.metrics.compute_sinr(
+            signal_relay_sud, interference_at_sud, noise
+        )
+
+        su_throughput = self.metrics.compute_throughput(
+            sinr_su, cfg.bandwidth
+        )
+        pu_throughput = self.metrics.compute_throughput(
+            sinr_pu, cfg.bandwidth
+        )
+
+        # ==============================================================
+        # Update state
+        # ==============================================================
+        self._step_count += 1
+
+        # Generate new channels for the next step
+        new_gains = self.channel_model.generate_channels(self._rng)
+        distances_map: Dict[str, float] = {
+            "pt_pr": cfg.d_pt_pr,
+            "pt_relay": cfg.d_pt_relay,
+            "su_relay": cfg.d_su_relay,
+            "relay_pr": cfg.d_relay_pr,
+            "relay_sud": cfg.d_relay_sud,
+            "pt_sud": cfg.d_pt_sud,
+        }
+        new_pl = {
+            link: self.propagation_model.compute_path_loss(d)
+            for link, d in distances_map.items()
+        }
+        new_eff = {
+            link: new_gains[link] * new_pl[link] for link in new_gains
+        }
+
+        self._state = SimulationState(
+            channel_gains=new_gains,
+            path_losses=new_pl,
+            effective_gains=new_eff,
+            power_allocation=np.array([p_su, p_relay], dtype=np.float32),
+            su_throughput=su_throughput,
+            pu_throughput=pu_throughput,
+            interference_at_pr=interference_at_pr,
+            relay_decoded=relay_decoded,
+            step_count=self._step_count,
+            sinr_su=sinr_su,
+            sinr_pu=sinr_pu,
+        )
+
+        # Build result
+        obs = self.get_observation(self._state)
+        reward = self.compute_reward(self._state)
+        truncated = self._step_count >= cfg.max_steps
+        terminated = False
+
+        info: Dict[str, Any] = {
+            "su_throughput": su_throughput,
+            "pu_throughput": pu_throughput,
+            "sinr_su": sinr_su,
+            "sinr_pu": sinr_pu,
+            "interference_at_pr": interference_at_pr,
+            "relay_decoded": relay_decoded,
+            "p_su": p_su,
+            "p_relay": p_relay,
+            "step": self._step_count,
+        }
+
+        return SimulationResult(
+            observation=obs,
+            reward=reward,
+            terminated=terminated,
+            truncated=truncated,
+            info=info,
+        )
+
+    def get_observation(self, state: SimulationState) -> np.ndarray:
+        """Build the observation vector from effective channel gains.
+
+        The observation order matches the canonical link ordering:
+        ``[pt_pr, pt_relay, su_relay, relay_pr, relay_sud, pt_sud]``.
+
+        Args:
+            state: Current simulation state.
+
+        Returns:
+            Numpy float32 array of shape ``(num_channels,)``.
+        """
+        link_order = [
+            "pt_pr",
+            "pt_relay",
+            "su_relay",
+            "relay_pr",
+            "relay_sud",
+            "pt_sud",
+        ]
+        obs = np.array(
+            [state.effective_gains.get(k, 0.0) for k in link_order],
+            dtype=np.float32,
+        )
+        return obs
+
+    def compute_reward(self, state: SimulationState) -> float:
+        """Reward = SU throughput − penalty if PU constraint violated.
+
+        Args:
+            state: Current simulation state.
+
+        Returns:
+            Scalar reward value.
+        """
+        reward = state.su_throughput
+        if state.interference_at_pr > self.config.interference_threshold:
+            penalty = self.config.penalty_weight * (
+                state.interference_at_pr
+                - self.config.interference_threshold
+            )
+            reward -= penalty
+        return reward

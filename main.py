@@ -1,8 +1,62 @@
 """
 Entry point for the CRN-RL-Framework.
-Responsible for orchestrating training and evaluation pipelines.
 Author: Ryan
 """
+import argparse
+import sys
+import os
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="CRN-RL Framework")
+    parser.add_argument("--config", type=str, default="configs/config.yaml", help="Path to base configuration file.")
+    parser.add_argument("--experiment", type=str, default=None, help="Path to experiment override configuration file.")
+    parser.add_argument("--test", action="store_true", help="Run a quick environment sanity check.")
+    parser.add_argument("--info", action="store_true", help="Print system information and exit.")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed.")
+    return parser.parse_args()
+
+
+def run_sanity_check():
+    """Run a quick environment sanity check."""
+    from envs.crn_env import make_crn_env
+    print("Running sanity check...")
+    env = make_crn_env()
+    obs, info = env.reset(seed=42)
+    print(f"Initial Observation: {obs}")
+    
+    for i in range(10):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, info = env.step(action)
+        print(f"Step {i+1}: Action: {action}, Reward: {reward:.4f}, Terminated: {terminated}, Truncated: {truncated}")
+        env.render()
+        
+    print("Sanity check completed successfully.")
+
+
+def print_system_info():
+    """Print dependency versions and system info."""
+    print("System Information:")
+    print(f"Python version: {sys.version}")
+    
+    try:
+        import numpy
+        print(f"NumPy version: {numpy.__version__}")
+    except ImportError:
+        print("NumPy is not installed.")
+        
+    try:
+        import torch
+        print(f"PyTorch version: {torch.__version__}")
+        print(f"CUDA available: {torch.cuda.is_available()}")
+    except ImportError:
+        print("PyTorch is not installed.")
+        
+    try:
+        import gymnasium
+        print(f"Gymnasium version: {gymnasium.__version__}")
+    except ImportError:
+        print("Gymnasium is not installed.")
 
 import os
 import random
@@ -96,155 +150,20 @@ def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> d
 
 
 def main():
-    """
-    Load configuration, setup environment, and run the pipeline.
-    """
-    print("Initializing CRN-RL-Framework...")
-
-    # Load master configuration
-    config_path = os.path.join("configs", "config.yaml")
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"Configuration file not found: {config_path}")
-
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-
-    # Load experiment-specific overrides if present
-    exp_path = os.path.join("configs", "experiment.yaml")
-    if os.path.exists(exp_path):
-        print(f"Loading experiment overrides from: {exp_path}")
-        with open(exp_path, "r") as f:
-            overrides = yaml.safe_load(f)
-            if overrides:
-                # Basic recursive merge for single-level dictionary keys
-                for section, vals in overrides.items():
-                    if section in config and isinstance(config[section], dict) and isinstance(vals, dict):
-                        config[section].update(vals)
-                    else:
-                        config[section] = vals
-
-    # Initialize environment and setup random seeds
-    sim_cfg = config.get("simulation", {})
-    seed = sim_cfg.get("seed", 42)
-    set_seed(seed)
-
-    env = OverlayCRNEnv(config)
-    env.action_space.seed(seed)
-
-    # Set compute device
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Running on device: {device}")
-
-    # Setup Agent
-    agent = TD3Agent(config, device=device)
-
-    # Setup directories
-    log_cfg = config.get("logging", {})
-    tb_enabled = log_cfg.get("tensorboard_enabled", True)
+    args = parse_args()
     
-    algo_name = config.get("algorithm", {}).get("name", "TD3")
-    run_name = f"{algo_name}_run_seed_{seed}"
-    log_dir = os.path.join(log_cfg.get("log_dir", "experiments/runs/"), run_name)
-    os.makedirs(log_dir, exist_ok=True)
-
-    writer = SummaryWriter(log_dir=log_dir) if tb_enabled else None
-    
-    eval_cfg = config.get("evaluation", {})
-    checkpoint_dir = eval_cfg.get("save_dir", "experiments/checkpoints/")
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    best_checkpoint_path = os.path.join(checkpoint_dir, f"{algo_name}_best_model.pth")
-    final_checkpoint_path = os.path.join(checkpoint_dir, f"{algo_name}_final_model.pth")
-
-    # Training parameters
-    train_cfg = config.get("training", {})
-    total_steps = train_cfg.get("total_steps", 10000)
-    start_steps = train_cfg.get("start_steps", 1000)
-    eval_interval = eval_cfg.get("eval_interval", 500)
-    eval_episodes = eval_cfg.get("eval_episodes", 5)
-
-    print(f"Starting training pipeline for {algo_name}...")
-    
-    obs, info = env.reset()
-    episode_reward = 0
-    episode_steps = 0
-    best_eval_reward = -np.inf
-
-    for step in range(1, total_steps + 1):
-        episode_steps += 1
-
-        # Select Action: Warmup with random actions to fill buffer, then use policy
-        if step < start_steps:
-            action = env.action_space.sample()
-        else:
-            action = agent.select_action(obs, info, explore=True)
-
-        # Environment Step
-        next_obs, reward, done, truncated, next_info = env.step(action)
-        episode_reward += reward
-
-        # Store transition in SequenceReplay/Flat Buffer
-        agent.replay_buffer.add(obs, action, reward, next_obs, done or truncated, info)
-
-        # Move to next state
-        obs = next_obs
-        info = next_info
-
-        # Perform gradient optimization step
-        if step >= start_steps:
-            agent.train(writer)
-
-        # Episode termination or truncation handling
-        if done or truncated:
-            # Write episode level statistics to TensorBoard
-            if writer:
-                writer.add_scalar("Episode/Total_Reward", episode_reward, step)
-                writer.add_scalar("Episode/Average_Secondary_Throughput", info["throughput_reward"], step)
-                writer.add_scalar("Episode/Primary_Throughput", info["primary_throughput"], step)
-                writer.add_scalar("Episode/BER", info["ber"], step)
-                writer.add_scalar("Episode/Outage_Rate", info["outage"], step)
-                writer.add_scalar("Episode/Average_Power_Watts", info["average_power"], step)
-                
-            print(f"Step: {step} | Ep Reward: {episode_reward:.2f} | SU Throughput: {info['throughput_reward']:.3f} | PU Throughput: {info['primary_throughput']:.3f} | Power: {info['average_power']:.4f} W")
-            
-            # Reset Env
-            obs, info = env.reset()
-            episode_reward = 0
-            episode_steps = 0
-
-        # Periodic Evaluation
-        if step % eval_interval == 0:
-            eval_env = OverlayCRNEnv(config)
-            eval_metrics = evaluate_policy(agent, eval_env, episodes=eval_episodes)
-            print(f"--- EVALUATION @ Step {step} ---")
-            print(f"Avg Ep Reward: {eval_metrics['total_reward']:.2f}")
-            print(f"Avg SU Throughput: {eval_metrics['throughput_s']:.3f} bps/Hz")
-            print(f"Avg PU Throughput: {eval_metrics['throughput_p']:.3f} bps/Hz")
-            print(f"Avg Outage Rate: {eval_metrics['outage']:.4f}")
-            print(f"Avg Power Consumed: {eval_metrics['average_power']:.4f} W")
-            print(f"Avg Relay Success: {eval_metrics.get('relay_success', 0.0):.4f}")
-            print(f"Avg QoS Satisfaction: {eval_metrics.get('qos_satisfaction', 0.0):.4f}")
-            print(f"Avg Constraint Satisfaction: {eval_metrics.get('constraint_satisfaction', 0.0):.4f}")
-
-            if writer:
-                writer.add_scalar("Eval/Average_Total_Reward", eval_metrics["total_reward"], step)
-                writer.add_scalar("Eval/Average_Secondary_Throughput", eval_metrics["throughput_s"], step)
-                writer.add_scalar("Eval/Average_Primary_Throughput", eval_metrics["throughput_p"], step)
-                writer.add_scalar("Eval/Outage_Rate", eval_metrics["outage"], step)
-                writer.add_scalar("Eval/Average_Power_Watts", eval_metrics["average_power"], step)
-                writer.add_scalar("Eval/Relay_Success_Rate", eval_metrics.get("relay_success", 0.0), step)
-                writer.add_scalar("Eval/QoS_Satisfaction_Rate", eval_metrics.get("qos_satisfaction", 0.0), step)
-                writer.add_scalar("Eval/Constraint_Satisfaction_Rate", eval_metrics.get("constraint_satisfaction", 0.0), step)
-
-            # Checkpoint: Save best model based on evaluation throughput & rewards
-            if eval_metrics["total_reward"] > best_eval_reward:
-                best_eval_reward = eval_metrics["total_reward"]
-                agent.save(best_checkpoint_path)
-
-    # Save final model state
-    agent.save(final_checkpoint_path)
-    if writer:
-        writer.close()
-    print("Training pipeline finished successfully.")
+    # Ensure the root path is in sys.path
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+        
+    if args.info:
+        print_system_info()
+    elif args.test:
+        run_sanity_check()
+    else:
+        from experiments.pipeline import run_experiment
+        run_experiment(args.config, args.experiment)
 
 
 if __name__ == "__main__":
