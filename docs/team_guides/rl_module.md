@@ -2,17 +2,19 @@
 **Assignee:** Aditya
 
 ## Objectives
-Implement RL training and evaluation scripts using Stable-Baselines3.
+Implement and optimize RL training, evaluation, and comparative benchmarking scripts for the three supported agents:
+*   **T3** (Twin Delayed DDPG Baseline)
+*   **Underlay TD3** (Adaption of original CAMO-TD3 limits)
+*   **Overlay TD3** (Relay and QoS-aware cooperative agent)
 
-## Files to modify
-- `agents/train_dqn.py`
-- `agents/train_ppo.py`
-- `agents/evaluate.py`
-- `baselines/*`
-
-## Expected APIs
-- Scripts should load the Gym environment from `envs.crn_env` and train SB3 models.
+## Files to modify/maintain
+- `agents/models.py` — GRU encoders, actors, and twin critics.
+- `agents/buffers.py` — Flat, episodic, and overlay sequence replay buffers.
+- `agents/train_td3.py` — Unified training loops and Lagrangian dual updates.
+- `agents/evaluate.py` — Policy loader and evaluator.
+- `agents/benchmark.py` — Comparative evaluation and plots generator.
 
 ## Testing Checklist
-- Ensure models converge on a dummy environment.
-- Save models to `experiments/runs/`.
+- Ensure all 4 unit tests in `tests/test_camo.py` pass.
+- Verify checkpoints save and load correctly under `experiments/checkpoints/`.
+- Verify comparative plots are correctly generated inside `plots/`.

@@ -3,6 +3,28 @@ Relay protocol implementation.
 Assignee: Shreya
 """
 
-# TODO (Shreya): Implement Decode-and-Forward (DF) logic.
-# Expected: Logic to check if relay decodes primary/secondary signal.
-# Reference: docs/team_guides/relay_module.md
+from typing import Protocol
+
+
+class RelayProtocol(Protocol):
+    """
+    Protocol for Relay protocols.
+    """
+
+    def can_decode(self, sinr: float, threshold: float) -> bool:
+        """
+        Check if the relay can successfully decode the signal.
+        """
+        ...
+
+
+class DecodeAndForward(RelayProtocol):
+    """
+    Decode-and-Forward (DF) relay protocol.
+    """
+
+    def can_decode(self, sinr: float, threshold: float) -> bool:
+        """
+        Return True if received SINR is above the threshold.
+        """
+        return sinr >= threshold

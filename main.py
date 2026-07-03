@@ -58,6 +58,96 @@ def print_system_info():
     except ImportError:
         print("Gymnasium is not installed.")
 
+import os
+import random
+import yaml
+import numpy as np
+import torch
+from torch.utils.tensorboard import SummaryWriter
+
+from envs.crn_env import OverlayCRNEnv
+from agents.train_td3 import TD3Agent
+
+
+def set_seed(seed: int):
+    """
+    Set random seeds for reproducibility.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> dict:
+    """
+    Evaluate agent policy deterministically over multiple episodes.
+    """
+    eval_metrics = {
+        "throughput_s": [],
+        "throughput_p": [],
+        "outage": [],
+        "ber": [],
+        "average_power": [],
+        "total_reward": [],
+        "relay_success": [],
+        "qos_satisfaction": [],
+        "constraint_satisfaction": [],
+    }
+
+    energy_limit = env.energy_limit
+
+    for _ in range(episodes):
+        obs, info = env.reset()
+        done = False
+        truncated = False
+        episode_reward = 0.0
+        
+        ep_throughput_s = []
+        ep_throughput_p = []
+        ep_outage = []
+        ep_ber = []
+        ep_average_power = []
+        ep_relay_success = []
+        ep_qos_satisfaction = []
+        ep_constraint_satisfaction = []
+
+        while not (done or truncated):
+            # Deterministic action selection (explore=False)
+            action = agent.select_action(obs, info, explore=False)
+            obs, reward, done, truncated, info = env.step(action)
+            episode_reward += reward
+
+            ep_throughput_s.append(info["throughput_reward"])
+            ep_throughput_p.append(info["primary_throughput"])
+            ep_outage.append(info["outage"])
+            ep_ber.append(info["ber"])
+            ep_average_power.append(info["average_power"])
+
+            dec = info.get("relay_decoded", 0.0)
+            ep_relay_success.append(dec)
+
+            qos_sat = 1.0 if info["outage"] == 0.0 else 0.0
+            ep_qos_satisfaction.append(qos_sat)
+
+            con_sat = 1.0 if (info["outage"] == 0.0 and info["average_power"] <= energy_limit) else 0.0
+            ep_constraint_satisfaction.append(con_sat)
+
+        eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
+        eval_metrics["throughput_p"].append(np.mean(ep_throughput_p))
+        eval_metrics["outage"].append(np.mean(ep_outage))
+        eval_metrics["ber"].append(np.mean(ep_ber))
+        eval_metrics["average_power"].append(np.mean(ep_average_power))
+        eval_metrics["relay_success"].append(np.mean(ep_relay_success))
+        eval_metrics["qos_satisfaction"].append(np.mean(ep_qos_satisfaction))
+        eval_metrics["constraint_satisfaction"].append(np.mean(ep_constraint_satisfaction))
+        eval_metrics["total_reward"].append(episode_reward)
+
+    # Average metrics
+    avg_metrics = {k: float(np.mean(v)) for k, v in eval_metrics.items()}
+    return avg_metrics
+
 
 def main():
     args = parse_args()
