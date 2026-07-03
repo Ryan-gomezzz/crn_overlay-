@@ -1,97 +1,107 @@
 """
-Gymnasium Environment for the Overlay CRN.
-Author: Ryan
+Overlay CRN Environment.
+Assignee: Ryan
 """
-
-from typing import Any, Dict, Optional, Tuple
-from collections import deque
 
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
-
-from simulator.overlay_model import OverlaySimulator
-from simulator.utils import dbm_to_watt
+from simulator.overlay_model import OverlayCRNModel
+from simulator.utils import dbm_to_watt, watt_to_dbm
 
 
 class OverlayCRNEnv(gym.Env):
-    """
-    Custom Environment that follows gymnasium interface.
-    Integrates the physical OverlaySimulator.
-    """
+    """Gymnasium environment for Overlay Cognitive Radio Networks."""
 
-    metadata = {"render_modes": ["console"]}
+    metadata = {"render_modes": ["human"]}
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
-        super().__init__()
-        self.config = config if config is not None else {}
+    def __init__(self, config: dict):
+        """Initialize the CRN environment.
 
-        # 2D Action space: [SUs power fraction, SUR relay power fraction]
+        Args:
+            config (dict): Configuration dictionary with keys:
+                - simulation: Simulation parameters
+                - camo_td3: CAMO-specific parameters
+        """
+        self.config = config
+        sim_cfg = config.get("simulation", {})
+        camo_cfg = config.get("camo_td3", {})
+
+        # Action space: [power_secondary, bandwidth_ratio]
         self.action_space = spaces.Box(
             low=0.0, high=1.0, shape=(2,), dtype=np.float32
         )
 
-        # 4D Observation space: [|h_pt_pr|^2, |h_sus_sur|^2, |h_sur_sud|^2, |h_sus_pr|^2]
+        # 4D Observation space:
+        # [|h_pt_pr|^2, |h_sus_sur|^2, |h_sur_sud|^2, |h_sus_pr|^2]
         self.observation_space = spaces.Box(
             low=0.0, high=np.inf, shape=(4,), dtype=np.float32
         )
 
-        # Initialize physical simulator
-        self.simulator = OverlaySimulator(self.config)
+        # Initialize model
+        self.model = OverlayCRNModel(config)
 
-        # Env configs
-        camo_cfg = self.config.get("camo_td3", {})
-        self.pu_rate_threshold = camo_cfg.get("pu_rate_threshold", 1.5)
-        
-        # We define limits for Interference (Watts) and Energy (Watts)
-        # Default limits: Interference = -50 dBm (1e-8 Watts)
-        # Default Energy Limit = 0.1 Watts
-        self.interference_limit = dbm_to_watt(camo_cfg.get("interference_limit_dbm", -50.0))
+        # Extract CAMO parameters
         self.energy_limit = camo_cfg.get("energy_limit_watts", 0.1)
+        # Interference limit: Default -50 dBm (1e-8 Watts)
+        self.interference_limit = dbm_to_watt(
+            camo_cfg.get("interference_limit_dbm", -50.0)
+        )
 
-        # Penalty coefficients for standard TD3 scalar reward
-        self.penalty_coef_inf = camo_cfg.get("penalty_coef_inf", 10.0)
-        self.penalty_coef_nrg = camo_cfg.get("penalty_coef_nrg", 10.0)
-
-        # History sequence variables for online tracking
+        # History length for context
         self.history_len = camo_cfg.get("history_length", 10)
-        self.obs_history = deque(maxlen=self.history_len)
-        self.act_history = deque(maxlen=self.history_len)
-        self.dec_history = deque(maxlen=self.history_len)
-        self.out_history = deque(maxlen=self.history_len)
+        self.obs_history = []
+        self.act_history = []
+        self.dec_history = []
+        self.out_history = []
 
         # Track steps in current episode
         self.current_step = 0
-        self.max_steps = self.config.get("simulation", {}).get("time_steps_per_episode", 100)
+        self.max_steps = self.config.get(
+            "simulation", {}
+        ).get("time_steps_per_episode", 100)
 
     def reset(
-        self, seed: Optional[int] = None, options: Optional[dict] = None
-    ) -> Tuple[np.ndarray, Dict]:
-        """
-        Resets the environment to an initial state.
+        self,
+        seed: int = None,
+        options: dict = None,
+    ):
+        """Reset the environment.
+
+        Args:
+            seed (int, optional): Random seed. Defaults to None.
+            options (dict, optional): Options. Defaults to None.
+
+        Returns:
+            tuple: (observation, info)
         """
         super().reset(seed=seed)
-        
-        # Reset simulator
-        sim_data = self.simulator.reset()
-        obs = sim_data["state"]
 
+        # Reset model
+        self.model.reset()
         self.current_step = 0
-        
-        # Initialize history buffers with zeros
-        self.obs_history.clear()
-        self.act_history.clear()
-        self.dec_history.clear()
-        self.out_history.clear()
-        
+
+        # Initialize histories
         for _ in range(self.history_len):
-            self.obs_history.append(np.zeros(self.observation_space.shape, dtype=np.float32))
-            self.act_history.append(np.zeros(self.action_space.shape, dtype=np.float32))
+            self.obs_history.append(
+                np.zeros(self.observation_space.shape, dtype=np.float32)
+            )
+            self.act_history.append(
+                np.zeros(self.action_space.shape, dtype=np.float32)
+            )
             self.dec_history.append(np.zeros((1,), dtype=np.float32))
             self.out_history.append(np.zeros((1,), dtype=np.float32))
 
-        # The first observation is pushed to history
-        self.obs_history.append(obs)
+        # Get initial observation
+        obs = np.array(
+            [
+                self.model.channel_gains["pt_pr"],
+                self.model.channel_gains["sus_sur"],
+                self.model.channel_gains["sur_sud"],
+                self.model.channel_gains["sus_pr"],
+            ],
+            dtype=np.float32,
+        )
 
         info = {
             "obs_history": np.array(self.obs_history, dtype=np.float32),
@@ -99,106 +109,74 @@ class OverlayCRNEnv(gym.Env):
             "dec_history": np.array(self.dec_history, dtype=np.float32),
             "out_history": np.array(self.out_history, dtype=np.float32),
         }
+
         return obs, info
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, float, bool, bool, Dict]:
-        """
-        Run one timestep of the environment's dynamics.
+    def step(self, action: np.ndarray):
+        """Execute one step in the environment.
+
+        Args:
+            action (np.ndarray): Agent's action [power, bw_ratio]
+
+        Returns:
+            tuple: (observation, reward, done, info)
         """
         self.current_step += 1
 
-        # Clip action to ensure valid power fractions
-        act = np.clip(action, self.action_space.low, self.action_space.high)
-        
-        # Step the physical simulator
-        sim_data = self.simulator.step(act)
-        obs = sim_data["next_state"]
-        metrics = sim_data["metrics"]
+        # Clip action to valid range
+        action = np.clip(action, 0.0, 1.0)
+        power_secondary = action[0]
+        bw_secondary = action[1]
 
-        # Extract/compute history states early for sequence deques
-        relay_decoded = metrics.get("relay_decoded", 0.0)
-        outage = 1.0 if metrics["throughput_p"] < self.pu_rate_threshold else 0.0
-
-        # Push to history
-        self.act_history.append(act)
-        self.obs_history.append(obs)
-        self.dec_history.append(np.array([relay_decoded], dtype=np.float32))
-        self.out_history.append(np.array([outage], dtype=np.float32))
-
-        # Compute separate components
-        throughput_p = metrics["throughput_p"]
-        throughput_s = metrics["throughput_s"]
-        power_s1 = metrics["power_s1"]
-        power_rel = metrics["power_rel"]
-        ber = metrics["ber_s"]
-
-        # Calculate actual physical interference caused to PR (Watts)
-        # TS1: SUs to PR; TS2: SUR to PR
-        h_sus_pr = self.simulator.channel_gains["sus_pr"]
-        h_sur_pr = self.simulator.channel_gains["sur_pr"]
-        interference_ts1 = power_s1 * h_sus_pr
-        interference_ts2 = (1.0 - metrics["beta"]) * power_rel * h_sur_pr
-        total_interference = interference_ts1 + interference_ts2
-
-        # Calculate energy consumed (average across two slots of 0.5 fraction each)
-        total_energy = 0.5 * power_s1 + 0.5 * power_rel
-
-        # Multi-objective individual metrics/rewards
-        # Throughput reward = secondary rate
-        throughput_reward = throughput_s
-
-        # Interference constraint: total_interference <= interference_limit
-        # Violation is the positive difference
-        interference_violation = max(0.0, total_interference - self.interference_limit)
-        # Interference reward can be defined as negative violation (or negative value)
-        interference_reward = -total_interference
-
-        # Energy constraint: total_energy <= energy_limit
-        energy_violation = max(0.0, total_energy - self.energy_limit)
-        energy_reward = -total_energy
-
-        # Calculate standard scalar reward (for standard TD3)
-        scalar_reward = (
-            throughput_reward
-            - self.penalty_coef_inf * interference_violation
-            - self.penalty_coef_nrg * energy_violation
+        # Run model step
+        rewards, metrics = self.model.step(
+            power_secondary, bw_secondary
         )
 
-        # Check termination & truncation
-        terminated = False
-        truncated = self.current_step >= self.max_steps
+        # Extract observation
+        obs = np.array(
+            [
+                self.model.channel_gains["pt_pr"],
+                self.model.channel_gains["sus_sur"],
+                self.model.channel_gains["sur_sud"],
+                self.model.channel_gains["sus_pr"],
+            ],
+            dtype=np.float32,
+        )
 
-        # Outage event: primary rate drops below target
-        outage = 1.0 if throughput_p < self.pu_rate_threshold else 0.0
+        # Update histories
+        self.obs_history.pop(0)
+        self.obs_history.append(obs)
+        self.act_history.pop(0)
+        self.act_history.append(np.array(action, dtype=np.float32))
+        self.dec_history.pop(0)
+        self.dec_history.append(
+            np.array(
+                [1.0 if metrics.get("relay_decoded", False) else 0.0],
+                dtype=np.float32,
+            )
+        )
+        self.out_history.pop(0)
+        self.out_history.append(
+            np.array(
+                [metrics.get("outage", 0.0)],
+                dtype=np.float32,
+            )
+        )
 
-        # Construct info dict
+        # Compute info
         info = {
-            "throughput_reward": throughput_reward,
-            "interference_reward": interference_reward,
-            "energy_reward": energy_reward,
-            "interference_violation": interference_violation,
-            "energy_violation": energy_violation,
-            "primary_throughput": throughput_p,
-            "outage": outage,
-            "ber": ber,
-            "average_power": total_energy,
             "obs_history": np.array(self.obs_history, dtype=np.float32),
             "act_history": np.array(self.act_history, dtype=np.float32),
             "dec_history": np.array(self.dec_history, dtype=np.float32),
             "out_history": np.array(self.out_history, dtype=np.float32),
-            "relay_decoded": relay_decoded,
+            **metrics,
         }
 
-        return obs, scalar_reward, terminated, truncated, info
+        # Determine termination
+        done = self.current_step >= self.max_steps
 
-    def render(self):
-        """
-        Render the environment state.
-        """
-        print("Rendering CRN Environment state.")
+        # Compute reward based on rewards dict
+        reward = rewards.get("total", 0.0)
 
-    def close(self):
-        """
-        Cleanup resources.
-        """
-        pass
+        return obs, reward, done, False, info

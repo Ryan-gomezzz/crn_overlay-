@@ -3,27 +3,6 @@ Performance metrics calculation.
 Assignee: Shreya
 """
 
-# TODO (Shreya): Implement SINR, capacity, and throughput equations.
-# Expected Inputs: signal power, interference power, noise power.
-# Expected Outputs: SINR, achievable rate.
-# Reference: docs/team_guides/relay_module.md
-
-import math
-
-
-def calculate_sinr(signal: float, interference: float, noise: float) -> float:
-    denominator = interference + noise
-    if denominator == 0:
-        return float("inf")
-    return signal / denominator
-
-
-def calculate_capacity(bandwidth: float, sinr: float) -> float:
-    return bandwidth * math.log2(1 + sinr)
-
-
-def calculate_throughput(capacity: float, efficiency: float = 1.0) -> float:
-    return capacity * efficiency
 import numpy as np
 from scipy.special import erfc
 
@@ -45,7 +24,7 @@ def calculate_sinr(
 
 def calculate_capacity(sinr: float, bandwidth: float = 1.0) -> float:
     """
-    Calculate Shannon capacity capacity (bps/Hz if bandwidth=1.0).
+    Calculate Shannon capacity (bps/Hz if bandwidth=1.0).
     C = bandwidth * log2(1 + SINR)
     """
     safe_sinr = max(sinr, 0.0)
