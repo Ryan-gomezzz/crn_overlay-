@@ -3,8 +3,6 @@ Propagation and path loss models.
 Assignee: Sneha
 """
 
-import numpy as np
-
 
 def calculate_path_loss(
     distance: float,

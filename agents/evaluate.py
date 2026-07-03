@@ -3,22 +3,22 @@ Evaluation Script.
 Assignee: Aditya
 """
 
-import sys
 import os
+import sys
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import yaml
 import torch
-import numpy as np
+import yaml
 
-from envs.crn_env import OverlayCRNEnv
 from agents.train_td3 import TD3Agent
-from main import set_seed, evaluate_policy
+from envs.crn_env import OverlayCRNEnv
+from main import evaluate_policy, set_seed
 
 
 def main():
     print("Initializing standalone evaluation...")
-    
+
     # Load configuration
     config_path = os.path.join("configs", "config.yaml")
     if not os.path.exists(config_path):
@@ -47,7 +47,7 @@ def main():
     eval_cfg = config.get("evaluation", {})
     checkpoint_dir = eval_cfg.get("save_dir", "experiments/checkpoints/")
     algo_name = config.get("algorithm", {}).get("name", "TD3")
-    
+
     checkpoint_path = os.path.join(checkpoint_dir, f"{algo_name}_best_model.pth")
     if not os.path.exists(checkpoint_path):
         # Fallback to final model
@@ -60,9 +60,9 @@ def main():
     # Run deterministic evaluation
     eval_episodes = eval_cfg.get("eval_episodes", 20)
     print(f"Evaluating {algo_name} policy over {eval_episodes} episodes...")
-    
+
     metrics = evaluate_policy(agent, env, episodes=eval_episodes)
-    
+
     print("\n================ EVALUATION SUMMARY ================")
     print(f"Algorithm:           {algo_name}")
     print(f"Checkpoint Loaded:   {checkpoint_path}")

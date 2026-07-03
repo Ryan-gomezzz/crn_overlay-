@@ -2,19 +2,22 @@
 Unit tests for CRN physical equations, sequence replay buffer, and CAMO-TD3 networks.
 """
 
-import yaml
 import numpy as np
-import torch
 import pytest
+import torch
 
-from simulator.propagation import calculate_path_loss
-from simulator.channels import RayleighFading
-from simulator.relay import DecodeAndForward
-from simulator.interference import calculate_received_power, calculate_interference
-from simulator.metrics import calculate_sinr, calculate_capacity, calculate_throughput, calculate_ber
-from envs.crn_env import OverlayCRNEnv
 from agents.buffers import SequenceReplayBuffer
-from agents.models import GRUBeliefEncoder, CAMO_Actor, TwinCritics
+from agents.models import CAMO_Actor, GRUBeliefEncoder, TwinCritics
+from simulator.channels import RayleighFading
+from simulator.interference import calculate_interference, calculate_received_power
+from simulator.metrics import (
+    calculate_ber,
+    calculate_capacity,
+    calculate_sinr,
+    calculate_throughput,
+)
+from simulator.propagation import calculate_path_loss
+from simulator.relay import DecodeAndForward
 
 
 def test_physical_equations():
@@ -62,8 +65,10 @@ def test_physical_equations():
 
 
 def test_sequence_replay_buffer():
-    buffer = SequenceReplayBuffer(capacity=100, obs_dim=4, action_dim=2, sequence_length=5, device="cpu")
-    
+    buffer = SequenceReplayBuffer(
+        capacity=100, obs_dim=4, action_dim=2, sequence_length=5, device="cpu"
+    )
+
     # Fill buffer with fake transitions forming episodes
     obs = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
     act = np.array([0.5, 0.5], dtype=np.float32)
@@ -109,7 +114,7 @@ def test_neural_networks():
     encoder = GRUBeliefEncoder(obs_dim=4, action_dim=2, embed_dim=16, hidden_dim=32)
     obs_seq = torch.randn(2, 5, 4)
     act_seq = torch.randn(2, 5, 2)
-    
+
     belief = encoder(obs_seq, act_seq)
     assert belief.shape == (2, 32)
 
@@ -127,21 +132,23 @@ def test_neural_networks():
 
 
 def test_overlay_camo_td3():
-    buffer = SequenceReplayBuffer(capacity=100, obs_dim=4, action_dim=2, sequence_length=5, device="cpu")
-    
+    buffer = SequenceReplayBuffer(
+        capacity=100, obs_dim=4, action_dim=2, sequence_length=5, device="cpu"
+    )
+
     # Fill buffer with fake transitions forming episodes with overlay info
     obs = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
     act = np.array([0.5, 0.5], dtype=np.float32)
     reward = 1.0
     next_obs = obs + 1.0
     info = {
-        "throughput_reward": 1.0, 
-        "interference_reward": 0.1, 
+        "throughput_reward": 1.0,
+        "interference_reward": 0.1,
         "energy_reward": 0.2,
         "primary_throughput": 2.0,
         "average_power": 0.08,
         "relay_decoded": 1.0,
-        "outage": 0.0
+        "outage": 0.0,
     }
 
     buffer.add(obs, act, reward, next_obs, False, info)
@@ -168,7 +175,8 @@ def test_overlay_camo_td3():
     assert nrg_rewards.shape == (2, 1)
 
     # Test encoder with 8D inputs
-    encoder = GRUBeliefEncoder(obs_dim=4, action_dim=2, embed_dim=16, hidden_dim=32, input_dim=8)
+    encoder = GRUBeliefEncoder(
+        obs_dim=4, action_dim=2, embed_dim=16, hidden_dim=32, input_dim=8
+    )
     belief = encoder(hist_seqs)
     assert belief.shape == (2, 32)
-

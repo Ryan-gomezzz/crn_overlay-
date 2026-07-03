@@ -48,7 +48,8 @@ class GRUBeliefEncoder(nn.Module):
     ) -> torch.Tensor:
         """
         Args:
-            obs_seq: Tensor of shape (batch_size, seq_len, obs_dim) or (batch_size, seq_len, input_dim)
+            obs_seq: Tensor of shape (batch_size, seq_len, obs_dim) or (batch_size, 
+            seq_len, input_dim)
             act_seq: Optional tensor of shape (batch_size, seq_len, action_dim)
         Returns:
             Belief state b_t of shape (batch_size, hidden_dim)
@@ -91,7 +92,8 @@ class CAMO_Actor(nn.Module):
 
 class TwinCritics(nn.Module):
     """
-    Twin Critic Networks. Evaluates Q_1(s, a) and Q_2(s, a) to avoid overestimation bias.
+    Twin Critic Networks. Evaluates Q_1(s, a) and Q_2(s, a) to avoid overestimation 
+    bias.
     """
 
     def __init__(self, state_dim: int, action_dim: int, hidden_dim: int = 256):

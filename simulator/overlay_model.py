@@ -4,14 +4,14 @@ Author: Ryan
 """
 
 from typing import Any, Dict
+
 import numpy as np
 
 from .base_model import BaseSimulator
 from .channels import RayleighFading
-from .propagation import calculate_path_loss
+from .interference import calculate_received_power
+from .metrics import calculate_ber, calculate_sinr, calculate_throughput
 from .relay import DecodeAndForward
-from .interference import calculate_received_power, calculate_interference
-from .metrics import calculate_sinr, calculate_throughput, calculate_ber
 from .utils import dbm_to_watt
 
 
@@ -69,13 +69,27 @@ class OverlaySimulator(BaseSimulator):
         Generate small-scale fading and compute total channel gains.
         """
         self.channel_gains = {
-            "pt_pr": self.channel_model.generate_gain(self.d_pt_pr, self.path_loss_exponent),
-            "pt_sur": self.channel_model.generate_gain(self.d_pt_sur, self.path_loss_exponent),
-            "pt_sud": self.channel_model.generate_gain(self.d_pt_sud, self.path_loss_exponent),
-            "sus_sur": self.channel_model.generate_gain(self.d_sus_sur, self.path_loss_exponent),
-            "sus_pr": self.channel_model.generate_gain(self.d_sus_pr, self.path_loss_exponent),
-            "sur_pr": self.channel_model.generate_gain(self.d_sur_pr, self.path_loss_exponent),
-            "sur_sud": self.channel_model.generate_gain(self.d_sur_sud, self.path_loss_exponent),
+            "pt_pr": self.channel_model.generate_gain(
+                self.d_pt_pr, self.path_loss_exponent
+            ),
+            "pt_sur": self.channel_model.generate_gain(
+                self.d_pt_sur, self.path_loss_exponent
+            ),
+            "pt_sud": self.channel_model.generate_gain(
+                self.d_pt_sud, self.path_loss_exponent
+            ),
+            "sus_sur": self.channel_model.generate_gain(
+                self.d_sus_sur, self.path_loss_exponent
+            ),
+            "sus_pr": self.channel_model.generate_gain(
+                self.d_sus_pr, self.path_loss_exponent
+            ),
+            "sur_pr": self.channel_model.generate_gain(
+                self.d_sur_pr, self.path_loss_exponent
+            ),
+            "sur_sud": self.channel_model.generate_gain(
+                self.d_sur_sud, self.path_loss_exponent
+            ),
         }
 
     def reset(self) -> Dict[str, Any]:
@@ -84,12 +98,15 @@ class OverlaySimulator(BaseSimulator):
         """
         self._generate_channels()
         # State vector: [|h_pt_pr|^2, |h_sus_sur|^2, |h_sur_sud|^2, |h_sus_pr|^2]
-        state = np.array([
-            self.channel_gains["pt_pr"],
-            self.channel_gains["sus_sur"],
-            self.channel_gains["sur_sud"],
-            self.channel_gains["sus_pr"]
-        ], dtype=np.float32)
+        state = np.array(
+            [
+                self.channel_gains["pt_pr"],
+                self.channel_gains["sus_sur"],
+                self.channel_gains["sur_sud"],
+                self.channel_gains["sus_pr"],
+            ],
+            dtype=np.float32,
+        )
         return {"state": state}
 
     def step(self, action: np.ndarray) -> Dict[str, Any]:
@@ -130,7 +147,9 @@ class OverlaySimulator(BaseSimulator):
         sinr_pt_sur = calculate_sinr(rx_pt_sur, rx_sus_sur, self.noise_power)
 
         # Can the relay decode the primary signal?
-        sur_decodes_primary = self.relay_protocol.can_decode(sinr_pt_sur, self.decoding_threshold)
+        sur_decodes_primary = self.relay_protocol.can_decode(
+            sinr_pt_sur, self.decoding_threshold
+        )
 
         # Decode secondary signal at SUR (SIC of primary signal if successful)
         if sur_decodes_primary:
@@ -139,10 +158,14 @@ class OverlaySimulator(BaseSimulator):
             sinr_sus_sur = calculate_sinr(rx_sus_sur, rx_pt_sur, self.noise_power)
 
         # --- TIME SLOT 2 ---
-        # SUR forwards combined signal if it successfully decodes both, otherwise it forwards nothing (or only primary)
-        # For simplicity in this base model: if SUR can decode, it forwards. Otherwise beta=0, p_rel=0.
-        sur_decodes_secondary = self.relay_protocol.can_decode(sinr_sus_sur, self.decoding_threshold)
-        
+        # SUR forwards combined signal if it successfully decodes both, otherwise it 
+        # forwards nothing (or only primary)
+        # For simplicity in this base model: if SUR can decode, it forwards. Otherwise 
+        # beta=0, p_rel=0.
+        sur_decodes_secondary = self.relay_protocol.can_decode(
+            sinr_sus_sur, self.decoding_threshold
+        )
+
         if sur_decodes_primary and sur_decodes_secondary:
             p_rel_p = beta * p_rel
             p_rel_s = (1.0 - beta) * p_rel
@@ -157,7 +180,9 @@ class OverlaySimulator(BaseSimulator):
 
         # Coherent combining of primary signal from PT and SUR
         coherent_primary_signal = (np.sqrt(rx_pt_pr_ts2) + np.sqrt(rx_sur_pr_ts2)) ** 2
-        sinr_pr_ts2 = calculate_sinr(coherent_primary_signal, interference_pr_ts2, self.noise_power)
+        sinr_pr_ts2 = calculate_sinr(
+            coherent_primary_signal, interference_pr_ts2, self.noise_power
+        )
 
         # SUd receives secondary signal in TS2
         rx_sur_sud_ts2 = calculate_received_power(p_rel_s, h_sur_sud)
@@ -166,11 +191,15 @@ class OverlaySimulator(BaseSimulator):
 
         # SUd decodes secondary signal. The primary signals act as interference.
         total_interference_sud = rx_pt_sud_ts2 + interference_sud_ts2
-        sinr_sud_ts2 = calculate_sinr(rx_sur_sud_ts2, total_interference_sud, self.noise_power)
+        sinr_sud_ts2 = calculate_sinr(
+            rx_sur_sud_ts2, total_interference_sud, self.noise_power
+        )
 
         # --- PERFORMANCE METRICS ---
-        rate_p = calculate_throughput(sinr_pr_ts1, time_fraction=0.5) + calculate_throughput(sinr_pr_ts2, time_fraction=0.5)
-        
+        rate_p = calculate_throughput(
+            sinr_pr_ts1, time_fraction=0.5
+        ) + calculate_throughput(sinr_pr_ts2, time_fraction=0.5)
+
         # Secondary rate is bottlenecked by the two hops
         rate_s1 = calculate_throughput(sinr_sus_sur, time_fraction=0.5)
         rate_s2 = calculate_throughput(sinr_sud_ts2, time_fraction=0.5)
@@ -180,12 +209,9 @@ class OverlaySimulator(BaseSimulator):
         ber_s = calculate_ber(sinr_sud_ts2)
 
         # Next state
-        next_state = np.array([
-            h_pt_pr,
-            h_sus_sur,
-            h_sur_sud,
-            h_sus_pr
-        ], dtype=np.float32)
+        next_state = np.array(
+            [h_pt_pr, h_sus_sur, h_sur_sud, h_sus_pr], dtype=np.float32
+        )
 
         return {
             "next_state": next_state,
@@ -200,5 +226,5 @@ class OverlaySimulator(BaseSimulator):
                 "power_rel": p_rel,
                 "beta": beta,
                 "relay_decoded": float(sur_decodes_primary and sur_decodes_secondary),
-            }
+            },
         }
