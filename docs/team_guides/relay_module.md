@@ -2,22 +2,22 @@
 **Assignee:** Shreya
 
 ## Objectives
-Implement Decode-and-Forward (DF) relay logic, time-slot management, signal equations, SINR, and interference.
+Implement Decode-and-Forward (DF) relay logic, time-slot management, received powers, interference, SINR, capacities, and bit error rates.
 
-## Files to modify
+## Files to modify/maintain
 - `simulator/relay.py`
 - `simulator/interference.py`
 - `simulator/metrics.py`
-- `tests/test_relay.py`
+- `simulator/overlay_model.py`
+- `tests/test_camo.py`
 
 ## Expected Classes and Functions
-- `class RelayProtocol(Protocol)`
-- `class DecodeAndForward(RelayProtocol)`
+- `class DecodeAndForward`
 - `def calculate_sinr(signal: float, interference: float, noise: float) -> float`
-
-## APIs
-- Accept channel gains from Sneha's module and compute final received signals.
+- `def calculate_ber(sinr: float) -> float`
+- `def calculate_capacity(sinr: float, bandwidth: float) -> float`
 
 ## Testing Checklist
-- Test DF relay condition (SNR > threshold).
-- Test interference aggregation.
+- Test DF relay condition (SINR > threshold).
+- Test co-channel interference aggregation.
+- Run `tests/test_camo.py` to verify physical layer math calculations.
