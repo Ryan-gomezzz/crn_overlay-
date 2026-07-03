@@ -8,7 +8,7 @@ import numpy as np
 
 def calculate_path_loss(
     distance: float,
-    path_loss_exponent: float = 3.0,
+    path_loss_exponent: float = 3.5,
     frequency: float = 2.4e9,
 ) -> float:
     """
