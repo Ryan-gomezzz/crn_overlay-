@@ -40,7 +40,7 @@ class TD3Agent:
         self.lr_actor = self.algo_cfg.get("lr_actor", 3e-4)
         self.lr_critic = self.algo_cfg.get("lr_critic", 3e-4)
 
-        self.obs_dim = 4
+        self.obs_dim = 7
         self.action_dim = 2
         self.total_it = 0
 

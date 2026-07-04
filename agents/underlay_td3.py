@@ -45,7 +45,7 @@ class UnderlayTD3Agent:
         self.lr_lambda = self.camo_cfg.get("lr_lambda", 1e-3)
 
         self.seq_len = self.camo_cfg.get("history_length", 10)
-        self.obs_dim = 4
+        self.obs_dim = 7
         self.action_dim = 2
         self.total_it = 0
 
