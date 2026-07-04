@@ -78,6 +78,14 @@ class OverlayCRNEnv(gym.Env):
         self._episode_reward: float = 0.0
         self._current_state = None
 
+        # History Tracking for CAMO-TD3 / Overlay-TD3
+        cfg = config or {}
+        self.history_length = cfg.get("camo_td3", {}).get("history_length", 10)
+        self._obs_history = np.zeros((self.history_length, self._num_channels), dtype=np.float32)
+        self._act_history = np.zeros((self.history_length, 2), dtype=np.float32)
+        self._dec_history = np.zeros((self.history_length, 1), dtype=np.float32)
+        self._out_history = np.zeros((self.history_length, 1), dtype=np.float32)
+
     # ----------------------------------------------------------------
     # Gymnasium API
     # ----------------------------------------------------------------
@@ -110,8 +118,25 @@ class OverlayCRNEnv(gym.Env):
         self._step_count = 0
         self._episode_reward = 0.0
 
+        # Reset history buffers
+        self._obs_history.fill(0.0)
+        self._act_history.fill(0.0)
+        self._dec_history.fill(0.0)
+        self._out_history.fill(0.0)
+
         obs = self.simulator.get_observation(state)
-        info: Dict[str, Any] = {"step": 0}
+        
+        # Add initial observation
+        self._obs_history = np.roll(self._obs_history, -1, axis=0)
+        self._obs_history[-1] = obs
+
+        info: Dict[str, Any] = {
+            "step": 0,
+            "obs_history": self._obs_history.copy(),
+            "act_history": self._act_history.copy(),
+            "dec_history": self._dec_history.copy(),
+            "out_history": self._out_history.copy(),
+        }
         return obs, info
 
     def step(
@@ -130,10 +155,27 @@ class OverlayCRNEnv(gym.Env):
         self._step_count += 1
         self._episode_reward += result.reward
 
+        # Update histories
+        self._act_history = np.roll(self._act_history, -1, axis=0)
+        self._act_history[-1] = action
+
+        self._obs_history = np.roll(self._obs_history, -1, axis=0)
+        self._obs_history[-1] = result.observation
+
+        self._dec_history = np.roll(self._dec_history, -1, axis=0)
+        self._dec_history[-1] = [float(result.info.get("relay_decoded", 0.0))]
+
+        self._out_history = np.roll(self._out_history, -1, axis=0)
+        self._out_history[-1] = [float(result.info.get("outage", 0.0))]
+
         # Add cumulative info
         info = dict(result.info)
         info["episode_reward"] = self._episode_reward
         info["episode_length"] = self._step_count
+        info["obs_history"] = self._obs_history.copy()
+        info["act_history"] = self._act_history.copy()
+        info["dec_history"] = self._dec_history.copy()
+        info["out_history"] = self._out_history.copy()
 
         return (
             result.observation,
