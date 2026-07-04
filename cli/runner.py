@@ -51,6 +51,8 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
     # Logging overrides
     if hasattr(args, "tensorboard") and args.tensorboard is not None:
         config["logging"]["tensorboard_enabled"] = args.tensorboard
+    if hasattr(args, "wandb") and args.wandb is not None:
+        config["logging"]["wandb_enabled"] = args.wandb
 
     # Evaluation overrides
     if hasattr(args, "episodes") and args.episodes is not None and args.command in ("train", "benchmark", "resume"):
@@ -60,12 +62,35 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
     
     return config
 
-class DummyWriter:
-    """Mock TensorBoard SummaryWriter to prevent crash when TB is disabled."""
+class HybridWriter:
+    """Wrapper that logs to TensorBoard and Weights & Biases simultaneously."""
+    def __init__(self, log_dir: str, tb_enabled: bool, wandb_enabled: bool, run_name: str, config: dict):
+        self.tb_writer = None
+        self.wandb_enabled = wandb_enabled
+
+        if tb_enabled:
+            from torch.utils.tensorboard import SummaryWriter
+            self.tb_writer = SummaryWriter(log_dir=log_dir)
+
+        if wandb_enabled:
+            import wandb
+            # Safely get project name, default to crn_overlay
+            project_name = config.get("logging", {}).get("wandb_project", "crn_overlay")
+            wandb.init(project=project_name, name=run_name, config=config, dir=os.path.dirname(log_dir), reinit=True)
+
     def add_scalar(self, name, value, step):
-        pass
+        if self.tb_writer:
+            self.tb_writer.add_scalar(name, value, step)
+        if self.wandb_enabled:
+            import wandb
+            wandb.log({name: value}, step=step)
+
     def close(self):
-        pass
+        if self.tb_writer:
+            self.tb_writer.close()
+        if self.wandb_enabled:
+            import wandb
+            wandb.finish()
 
 def run_single_train(
     agent_name: str, 
@@ -118,15 +143,17 @@ def run_single_train(
     with open(os.path.join(run_dir, "config_snapshot.yaml"), "w") as f:
         yaml.dump(config, f)
         
-    # Tensorboard
+    # Logging Integrations (TensorBoard & WandB)
     tb_enabled = config["logging"].get("tensorboard_enabled", True)
+    wandb_enabled = config["logging"].get("wandb_enabled", False)
+    
+    tb_dir = os.path.join(run_dir, "tensorboard")
+    writer = HybridWriter(log_dir=tb_dir, tb_enabled=tb_enabled, wandb_enabled=wandb_enabled, run_name=run_name, config=config)
+    
     if tb_enabled:
-        from torch.utils.tensorboard import SummaryWriter
-        tb_dir = os.path.join(run_dir, "tensorboard")
-        writer = SummaryWriter(log_dir=tb_dir)
         log_print(f"TensorBoard logging enabled: {tb_dir}")
-    else:
-        writer = DummyWriter()
+    if wandb_enabled:
+        log_print(f"Weights & Biases logging enabled.")
 
     # Checkpoint paths
     ckpt_dir = os.path.join(run_dir, "checkpoints")

@@ -87,6 +87,7 @@ def add_common_overrides(parser: argparse.ArgumentParser):
     parser.add_argument("--save-best", type=str_to_bool, default=True, help="Save the best model based on evaluation metrics")
     parser.add_argument("--save-final", type=str_to_bool, default=True, help="Save the final model at the end of execution")
     parser.add_argument("--tensorboard", type=str_to_bool, default=True, help="Enable or disable TensorBoard logging")
+    parser.add_argument("--wandb", type=str_to_bool, default=False, help="Enable Weights & Biases logging")
     parser.add_argument("--output-dir", type=str, default="experiments", help="Output directory for experiments")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose console logs")
     parser.add_argument("--render", action="store_true", help="Enable rendering of the env (if supported)")
