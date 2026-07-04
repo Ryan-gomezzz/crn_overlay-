@@ -61,9 +61,9 @@ class OverlayTD3Agent:
             device=self.device
         )
 
-        # Recurrent GRU Belief Encoders (input_dim = 8 for obs, act, dec, out)
-        self.encoder = GRUBeliefEncoder(self.obs_dim, self.action_dim, hidden_dim=64, input_dim=8).to(self.device)
-        self.encoder_target = GRUBeliefEncoder(self.obs_dim, self.action_dim, hidden_dim=64, input_dim=8).to(self.device)
+        # Recurrent GRU Belief Encoders (input_dim = 11 for obs, act, dec, out)
+        self.encoder = GRUBeliefEncoder(self.obs_dim, self.action_dim, hidden_dim=64, input_dim=11).to(self.device)
+        self.encoder_target = GRUBeliefEncoder(self.obs_dim, self.action_dim, hidden_dim=64, input_dim=11).to(self.device)
         self.encoder_target.load_state_dict(self.encoder.state_dict())
         self.encoder_optimizer = optim.Adam(self.encoder.parameters(), lr=self.lr_actor)
 
@@ -126,7 +126,7 @@ class OverlayTD3Agent:
         dec_history = info["dec_history"]
         out_history = info["out_history"]
 
-        # Concatenate histories to shape (seq_len, 8)
+        # Concatenate histories to shape (seq_len, 11)
         history = np.concatenate([obs_history, act_history, dec_history, out_history], axis=-1)
         history_tensor = torch.as_tensor(history, dtype=torch.float32, device=self.device).unsqueeze(0)
 
