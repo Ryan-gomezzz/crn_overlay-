@@ -3,8 +3,6 @@ Tests for Wireless Channels.
 Assignee: Sneha
 """
 
-
-
 import numpy as np
 
 from simulator.channels import RayleighFading

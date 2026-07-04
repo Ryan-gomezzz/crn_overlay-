@@ -3,14 +3,16 @@ Sequence Replay Buffer for CAMO-TD3 and TD3.
 """
 
 import random
-from typing import Dict, List, Tuple, Union, Any
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 import torch
 
 
 class SequenceReplayBuffer:
     """
-    Episode-aware replay buffer supporting sequential sampling and standard flat sampling.
+    Episode-aware replay buffer supporting sequential sampling and standard 
+    flat sampling.
     """
 
     def __init__(
@@ -72,9 +74,7 @@ class SequenceReplayBuffer:
 
     def sample_standard(
         self, batch_size: int
-    ) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
-    ]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Standard random sampling of flat transitions (backward compatible with TD3).
         """
@@ -91,7 +91,9 @@ class SequenceReplayBuffer:
 
         obs = np.array([t["obs"] for t in sampled], dtype=np.float32)
         actions = np.array([t["action"] for t in sampled], dtype=np.float32)
-        rewards = np.array([t["reward"] for t in sampled], dtype=np.float32).reshape(-1, 1)
+        rewards = np.array([t["reward"] for t in sampled], dtype=np.float32).reshape(
+            -1, 1
+        )
         next_obs = np.array([t["next_obs"] for t in sampled], dtype=np.float32)
         dones = np.array([t["done"] for t in sampled], dtype=np.float32).reshape(-1, 1)
 
@@ -152,7 +154,7 @@ class SequenceReplayBuffer:
             # Sample a random episode
             ep = random.choice(all_episodes)
             ep_len = len(ep)
-            
+
             # Sample a step index t in this episode
             t = random.randint(0, ep_len - 1)
 
@@ -201,15 +203,36 @@ class SequenceReplayBuffer:
             nrg_reward_batch.append(ep[t]["energy_reward"])
 
         # Convert to arrays and tensors
-        obs_seqs = torch.as_tensor(np.array(obs_seq_batch, dtype=np.float32), device=self.device)
-        act_seqs = torch.as_tensor(np.array(act_seq_batch, dtype=np.float32), device=self.device)
-        rewards = torch.as_tensor(np.array(reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        next_obs_seqs = torch.as_tensor(np.array(next_obs_seq_batch, dtype=np.float32), device=self.device)
-        next_act_seqs = torch.as_tensor(np.array(next_act_seq_batch, dtype=np.float32), device=self.device)
-        dones = torch.as_tensor(np.array(done_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        thr_rewards = torch.as_tensor(np.array(thr_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        inf_rewards = torch.as_tensor(np.array(inf_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        nrg_rewards = torch.as_tensor(np.array(nrg_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
+        obs_seqs = torch.as_tensor(
+            np.array(obs_seq_batch, dtype=np.float32), device=self.device
+        )
+        act_seqs = torch.as_tensor(
+            np.array(act_seq_batch, dtype=np.float32), device=self.device
+        )
+        rewards = torch.as_tensor(
+            np.array(reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device
+        )
+        next_obs_seqs = torch.as_tensor(
+            np.array(next_obs_seq_batch, dtype=np.float32), device=self.device
+        )
+        next_act_seqs = torch.as_tensor(
+            np.array(next_act_seq_batch, dtype=np.float32), device=self.device
+        )
+        dones = torch.as_tensor(
+            np.array(done_batch, dtype=np.float32).reshape(-1, 1), device=self.device
+        )
+        thr_rewards = torch.as_tensor(
+            np.array(thr_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
+        inf_rewards = torch.as_tensor(
+            np.array(inf_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
+        nrg_rewards = torch.as_tensor(
+            np.array(nrg_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
 
         return (
             obs_seqs,
@@ -239,7 +262,8 @@ class SequenceReplayBuffer:
         Sample continuous sequences for OVERLAY_CAMO_TD3.
         Returns concatenated historical inputs:
             history_seqs:      (batch_size, L, 8) -> [obs, act, dec, out]
-            next_history_seqs: (batch_size, L, 8) -> [next_obs, next_act, next_dec, next_out]
+            next_history_seqs: (batch_size, L, 8) -> [next_obs, next_act, next_dec, 
+            next_out]
             actions:           (batch_size, act_dim) -> action at step t
             rewards:           (batch_size, 1)
             dones:             (batch_size, 1)
@@ -274,10 +298,16 @@ class SequenceReplayBuffer:
             hist_seq = []
             for i in range(t - L + 1, t + 1):
                 if i < 0:
-                    step_vec = np.zeros(self.obs_dim + self.action_dim + 2, dtype=np.float32)
+                    step_vec = np.zeros(
+                        self.obs_dim + self.action_dim + 2, dtype=np.float32
+                    )
                 else:
                     obs = ep[i]["obs"]
-                    prev_act = ep[i - 1]["action"] if i - 1 >= 0 else np.zeros(self.action_dim, dtype=np.float32)
+                    prev_act = (
+                        ep[i - 1]["action"]
+                        if i - 1 >= 0
+                        else np.zeros(self.action_dim, dtype=np.float32)
+                    )
                     dec = ep[i]["relay_decoded"]
                     out = ep[i]["outage"]
                     step_vec = np.concatenate([obs, prev_act, [dec], [out]], axis=0)
@@ -287,10 +317,16 @@ class SequenceReplayBuffer:
             next_hist_seq = []
             for i in range(t - L + 2, t + 2):
                 if i < 0:
-                    step_vec = np.zeros(self.obs_dim + self.action_dim + 2, dtype=np.float32)
+                    step_vec = np.zeros(
+                        self.obs_dim + self.action_dim + 2, dtype=np.float32
+                    )
                 elif i <= t:
                     obs = ep[i]["obs"]
-                    prev_act = ep[i - 1]["action"] if i - 1 >= 0 else np.zeros(self.action_dim, dtype=np.float32)
+                    prev_act = (
+                        ep[i - 1]["action"]
+                        if i - 1 >= 0
+                        else np.zeros(self.action_dim, dtype=np.float32)
+                    )
                     dec = ep[i]["relay_decoded"]
                     out = ep[i]["outage"]
                     step_vec = np.concatenate([obs, prev_act, [dec], [out]], axis=0)
@@ -313,14 +349,33 @@ class SequenceReplayBuffer:
             nrg_reward_batch.append(ep[t]["average_power"])
 
         # Convert to tensors
-        hist_seqs = torch.as_tensor(np.array(hist_seq_batch, dtype=np.float32), device=self.device)
-        next_hist_seqs = torch.as_tensor(np.array(next_hist_seq_batch, dtype=np.float32), device=self.device)
-        actions = torch.as_tensor(np.array(action_batch, dtype=np.float32), device=self.device)
-        rewards = torch.as_tensor(np.array(reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        dones = torch.as_tensor(np.array(done_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        thr_rewards = torch.as_tensor(np.array(thr_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        pu_qos_rewards = torch.as_tensor(np.array(pu_qos_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
-        nrg_rewards = torch.as_tensor(np.array(nrg_reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device)
+        hist_seqs = torch.as_tensor(
+            np.array(hist_seq_batch, dtype=np.float32), device=self.device
+        )
+        next_hist_seqs = torch.as_tensor(
+            np.array(next_hist_seq_batch, dtype=np.float32), device=self.device
+        )
+        actions = torch.as_tensor(
+            np.array(action_batch, dtype=np.float32), device=self.device
+        )
+        rewards = torch.as_tensor(
+            np.array(reward_batch, dtype=np.float32).reshape(-1, 1), device=self.device
+        )
+        dones = torch.as_tensor(
+            np.array(done_batch, dtype=np.float32).reshape(-1, 1), device=self.device
+        )
+        thr_rewards = torch.as_tensor(
+            np.array(thr_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
+        pu_qos_rewards = torch.as_tensor(
+            np.array(pu_qos_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
+        nrg_rewards = torch.as_tensor(
+            np.array(nrg_reward_batch, dtype=np.float32).reshape(-1, 1),
+            device=self.device,
+        )
 
         return (
             hist_seqs,

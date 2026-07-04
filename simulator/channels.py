@@ -4,7 +4,9 @@ Assignee: Sneha
 """
 
 from typing import Protocol
+
 import numpy as np
+
 from .propagation import calculate_path_loss
 
 

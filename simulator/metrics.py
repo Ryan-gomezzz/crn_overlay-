@@ -8,23 +8,39 @@ from scipy.special import erfc
 
 
 def calculate_sinr(
-    signal_power: float,
-    interference_power: float,
-    noise_power: float,
+    signal=None,
+    interference=None,
+    noise=None,
+    signal_power=None,
+    interference_power=None,
+    noise_power=None,
 ) -> float:
     """
     Calculate Signal-to-Interference-plus-Noise Ratio (SINR).
-    SINR = P_sig / (P_inf + P_noise)
+
+    Supports both:
+    - signal, interference, noise
+    - signal_power, interference_power, noise_power
     """
-    denominator = interference_power + noise_power
-    if denominator <= 1e-15:
-        denominator = 1e-15
-    return float(signal_power / denominator)
+
+    if signal is None:
+        signal = signal_power
+    if interference is None:
+        interference = interference_power
+    if noise is None:
+        noise = noise_power
+
+    denominator = interference + noise
+
+    if denominator == 0:
+        return float("inf")
+
+    return float(signal / denominator)
 
 
 def calculate_capacity(sinr: float, bandwidth: float = 1.0) -> float:
     """
-    Calculate Shannon capacity capacity (bps/Hz if bandwidth=1.0).
+    Calculate Shannon capacity (bps/Hz if bandwidth=1.0).
     C = bandwidth * log2(1 + SINR)
     """
     safe_sinr = max(sinr, 0.0)

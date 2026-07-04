@@ -1,3 +1,19 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crn-rl-framework"
+version = "0.1.0"
+description = "A modular reinforcement learning framework for Overlay Cognitive Radio Networks"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Team", email = "info@example.com"}
+]
+requires-python = ">=3.11"
+dependencies = []
+
 [tool.black]
 line-length = 88
 target-version = ['py311']
