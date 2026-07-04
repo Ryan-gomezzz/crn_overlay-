@@ -21,7 +21,7 @@ def test_env_creation(env):
 def test_env_observation_space(env):
     """Verify observation space shape and bounds."""
     assert isinstance(env.observation_space, Box)
-    assert env.observation_space.shape == (6,)
+    assert env.observation_space.shape == (7,)
     assert np.all(env.observation_space.low == 0.0)
     assert np.all(env.observation_space.high == np.inf)
 

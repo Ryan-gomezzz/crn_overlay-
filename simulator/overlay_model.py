@@ -32,79 +32,63 @@ from simulator.base_model import (
 
 
 # ===================================================================
-# Default stub implementations (placeholder physics)
+# Team Integration Adapters (Sneha and Shreya's Physics)
 # ===================================================================
 
+from simulator.channels import RayleighFading
+from simulator.propagation import calculate_path_loss
+from simulator.relay import DecodeAndForward
+from simulator.interference import calculate_received_power
+from simulator.metrics import calculate_sinr, calculate_throughput
 
-class DefaultChannelModel:
-    """Generates random uniform channel gains (placeholder for Sneha)."""
+class TeamChannelAdapter:
+    """Uses Sneha's RayleighFading to generate channels."""
+    def __init__(self):
+        self.fading = RayleighFading()
 
-    def generate_channels(
-        self, rng: np.random.Generator
-    ) -> Dict[str, float]:
-        """Return uniform [0.1, 2.0] channel gains for every link."""
-        links = [
-            "pt_pr",
-            "pt_relay",
-            "su_relay",
-            "relay_pr",
-            "relay_sud",
-            "pt_sud",
-        ]
-        return {link: float(rng.uniform(0.1, 2.0)) for link in links}
+    def generate_channels(self, rng: np.random.Generator) -> Dict[str, float]:
+        links = ["pt_pr", "pt_relay", "su_relay", "relay_pr", "relay_sud", "pt_sud", "su_pr"]
+        # Generate |g|^2 fading coefficient for each link
+        return {link: float(abs(self.fading.generate_coefficient(rng))**2) for link in links}
 
 
-class DefaultPropagationModel:
-    """Returns unity path loss — no attenuation (placeholder for Sneha)."""
-
+class TeamPropagationAdapter:
+    """Uses Sneha's calculate_path_loss."""
     def compute_path_loss(self, distance: float) -> float:
-        """No path loss applied in the default stub."""
-        return 1.0
+        return calculate_path_loss(distance)
 
 
-class DefaultRelayModel:
-    """Always decodes successfully (placeholder for Shreya)."""
+class TeamRelayAdapter:
+    """Uses Shreya's DecodeAndForward relay protocol."""
+    def __init__(self):
+        self.df = DecodeAndForward(snr_threshold=1.0)
 
     def can_decode(self, snr: float) -> bool:
-        """Relay always decodes in the default stub."""
-        return True
+        return self.df.can_decode(snr)
 
-    def forward(
-        self, channel_gain: float, power: float, noise: float
-    ) -> float:
-        """Forwards at full received power: gain * power."""
-        return channel_gain * power
+    def forward(self, channel_gain: float, power: float, noise: float) -> float:
+        return calculate_received_power(power, channel_gain)
 
 
-class DefaultInterferenceModel:
-    """Returns zero interference (placeholder for Shreya)."""
-
+class TeamInterferenceAdapter:
+    """Uses Shreya's interference computations."""
     def compute_interference(
-        self,
-        powers: Dict[str, float],
-        gains: Dict[str, float],
+        self, powers: Dict[str, float], gains: Dict[str, float]
     ) -> Dict[str, float]:
-        """No interference in the default stub."""
-        return {"pr": 0.0, "sud": 0.0}
+        int_pr = calculate_received_power(powers.get("su", 0.0), gains.get("su_pr", 0.0)) + \
+                 calculate_received_power(powers.get("relay", 0.0), gains.get("relay_pr", 0.0))
+        
+        int_sud = calculate_received_power(powers.get("pt", 0.0), gains.get("pt_sud", 0.0))
+        return {"pr": int_pr, "sud": int_sud}
 
 
-class DefaultMetricsCalculator:
-    """Basic Shannon-capacity metrics (placeholder for Shreya)."""
-
-    def compute_sinr(
-        self, signal: float, interference: float, noise: float
-    ) -> float:
-        """SINR = signal / (interference + noise)."""
-        denom = interference + noise
-        if denom <= 0:
-            return 0.0
-        return signal / denom
+class TeamMetricsAdapter:
+    """Uses Shreya's SINR and Throughput metrics."""
+    def compute_sinr(self, signal: float, interference: float, noise: float) -> float:
+        return calculate_sinr(signal_power=signal, interference_power=interference, noise_power=noise)
 
     def compute_throughput(self, sinr: float, bandwidth: float) -> float:
-        """Shannon capacity: log2(1 + SINR) in bits/s/Hz."""
-        if sinr <= 0:
-            return 0.0
-        return math.log2(1.0 + sinr)
+        return calculate_throughput(sinr, time_fraction=1.0, bandwidth=bandwidth)
 
 
 # ===================================================================
@@ -146,19 +130,19 @@ class OverlaySimulator(BaseSimulator):
         super().__init__(config)
 
         self.channel_model: ChannelModelProtocol = (
-            channel_model or DefaultChannelModel()
+            channel_model or TeamChannelAdapter()
         )
         self.propagation_model: PropagationModelProtocol = (
-            propagation_model or DefaultPropagationModel()
+            propagation_model or TeamPropagationAdapter()
         )
         self.relay_model: RelayProtocol = (
-            relay_model or DefaultRelayModel()
+            relay_model or TeamRelayAdapter()
         )
         self.interference_model: InterferenceModelProtocol = (
-            interference_model or DefaultInterferenceModel()
+            interference_model or TeamInterferenceAdapter()
         )
         self.metrics: MetricsCalculatorProtocol = (
-            metrics_calculator or DefaultMetricsCalculator()
+            metrics_calculator or TeamMetricsAdapter()
         )
 
         # Internal bookkeeping
@@ -194,6 +178,7 @@ class OverlaySimulator(BaseSimulator):
             "relay_pr": cfg.d_relay_pr,
             "relay_sud": cfg.d_relay_sud,
             "pt_sud": cfg.d_pt_sud,
+            "su_pr": getattr(cfg, "d_su_pr", 80.0),
         }
         path_losses = {
             link: self.propagation_model.compute_path_loss(d)
@@ -316,6 +301,7 @@ class OverlaySimulator(BaseSimulator):
             "relay_pr": cfg.d_relay_pr,
             "relay_sud": cfg.d_relay_sud,
             "pt_sud": cfg.d_pt_sud,
+            "su_pr": getattr(cfg, "d_su_pr", 80.0),
         }
         new_pl = {
             link: self.propagation_model.compute_path_loss(d)
@@ -384,6 +370,7 @@ class OverlaySimulator(BaseSimulator):
             "relay_pr",
             "relay_sud",
             "pt_sud",
+            "su_pr",
         ]
         obs = np.array(
             [state.effective_gains.get(k, 0.0) for k in link_order],

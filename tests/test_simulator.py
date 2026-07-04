@@ -13,7 +13,7 @@ def test_simulator_config_defaults(default_config):
     assert default_config.p_max_su == 1.0
     assert default_config.p_max_relay == 1.0
     assert default_config.p_pt == 1.0
-    assert default_config.num_channels == 6
+    assert default_config.num_channels == 7
     assert default_config.max_steps == 200
 
 
@@ -27,7 +27,7 @@ def test_simulator_reset(simulator):
     """Call reset(), verify it returns a SimulationState."""
     state = simulator.reset(seed=42)
     assert isinstance(state, SimulationState)
-    assert len(state.channel_gains) == 6
+    assert len(state.channel_gains) == 7
     assert "pt_pr" in state.channel_gains
     assert state.step_count == 0
 
@@ -40,7 +40,7 @@ def test_simulator_step(simulator):
     
     assert isinstance(result, SimulationResult)
     assert isinstance(result.observation, np.ndarray)
-    assert result.observation.shape == (6,)
+    assert result.observation.shape == (7,)
     assert isinstance(result.reward, float)
     assert isinstance(result.info, dict)
 

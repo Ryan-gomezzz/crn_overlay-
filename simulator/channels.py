@@ -30,13 +30,17 @@ class RayleighFading(WirelessChannel):
     def __init__(self, frequency: float = 2.4e9):
         self.frequency = frequency
 
-    def generate_coefficient(self) -> complex:
+    def generate_coefficient(self, rng: np.random.Generator = None) -> complex:
         """
         Generate complex Rayleigh fading coefficient g.
         g ~ CN(0, 1)
         """
-        real = np.random.normal(0, 1.0 / np.sqrt(2.0))
-        imag = np.random.normal(0, 1.0 / np.sqrt(2.0))
+        if rng is None:
+            real = np.random.normal(0, 1.0 / np.sqrt(2.0))
+            imag = np.random.normal(0, 1.0 / np.sqrt(2.0))
+        else:
+            real = rng.normal(0, 1.0 / np.sqrt(2.0))
+            imag = rng.normal(0, 1.0 / np.sqrt(2.0))
         return complex(real, imag)
 
     def generate_gain(self, distance: float, path_loss_exponent: float) -> float:

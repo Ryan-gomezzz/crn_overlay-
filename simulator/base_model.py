@@ -63,6 +63,7 @@ class SimulatorConfig:
     d_relay_sud: float = 40.0
     d_su_sud: float = 70.0
     d_pt_sud: float = 90.0
+    d_su_pr: float = 80.0
 
     # Power constraints (Watts)
     p_max_su: float = 1.0
@@ -74,7 +75,7 @@ class SimulatorConfig:
 
     # System parameters
     bandwidth: float = 1e6
-    num_channels: int = 6
+    num_channels: int = 7
     max_steps: int = 200
 
     # PU protection
@@ -132,7 +133,7 @@ class SimulationResult:
     """
 
     observation: np.ndarray = field(
-        default_factory=lambda: np.zeros(6, dtype=np.float32)
+        default_factory=lambda: np.zeros(7, dtype=np.float32)
     )
     reward: float = 0.0
     terminated: bool = False
