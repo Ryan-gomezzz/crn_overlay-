@@ -37,16 +37,16 @@ training:
 
 camo_td3:
   history_length: 10
-  decoding_threshold: 1.0
-  pu_rate_threshold: 1.5   # Rate target for primary user (bps/Hz)
-  interference_limit_dbm: -50.0   # Limit in dBm for SUs interference to PR
-  energy_limit_watts: 0.1         # Max power average limit (Watts)
-  penalty_coef_inf: 10.0          # Scaling for standard TD3 interference penalty
-  penalty_coef_nrg: 10.0          # Scaling for standard TD3 energy penalty
-  lr_lambda: 0.001                # Lagrangian learning rate
-  lambda_inf_init: 0.1
-  lambda_qos_init: 0.1            # QoS Lagrangian initial value for OVERLAY_CAMO_TD3
-  lambda_nrg_init: 0.1
+  decoding_threshold: 0.1         # Lowered to make it easier for relay to decode
+  pu_rate_threshold: 0.5          # Lowered rate target for primary user so SU can interfere slightly
+  interference_limit_dbm: -50.0   
+  energy_limit_watts: 0.1         
+  penalty_coef_inf: 1.0           # Reduced from 10.0
+  penalty_coef_nrg: 1.0           # Reduced from 10.0
+  lr_lambda: 0.001                
+  lambda_inf_init: 0.001          # Reduced from 0.1
+  lambda_qos_init: 0.001          # Reduced from 0.1 (makes agent less terrified of dropping PU rate initially)
+  lambda_nrg_init: 0.001          # Reduced from 0.1
   lambda_clamp_max: 50.0
   eta_explore_init: 0.05
   eta_explore_decay: 0.9999
