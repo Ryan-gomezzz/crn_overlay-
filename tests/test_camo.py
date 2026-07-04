@@ -1,5 +1,5 @@
 """
-Unit tests for CRN physical equations, sequence replay buffer, and CAMO-TD3 networks.
+Unit tests for CRN physical equations, sequence replay buffer, and Underlay/Overlay TD3 networks.
 """
 
 import yaml
@@ -126,7 +126,7 @@ def test_neural_networks():
     assert q2.shape == (2, 1)
 
 
-def test_overlay_camo_td3():
+def test_overlay_td3():
     buffer = SequenceReplayBuffer(capacity=100, obs_dim=4, action_dim=2, sequence_length=5, device="cpu")
     
     # Fill buffer with fake transitions forming episodes with overlay info

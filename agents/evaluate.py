@@ -49,11 +49,23 @@ def main():
     algo_name = config.get("algorithm", {}).get("name", "TD3")
     
     checkpoint_path = os.path.join(checkpoint_dir, f"{algo_name}_best_model.pth")
+    legacy_map = {
+        "UNDERLAY_TD3": "CAMO_TD3",
+        "OVERLAY_TD3": "OVERLAY_CAMO_TD3"
+    }
+    
+    if not os.path.exists(checkpoint_path):
+        legacy_name = legacy_map.get(algo_name, algo_name)
+        checkpoint_path = os.path.join(checkpoint_dir, f"{legacy_name}_best_model.pth")
+        
     if not os.path.exists(checkpoint_path):
         # Fallback to final model
         checkpoint_path = os.path.join(checkpoint_dir, f"{algo_name}_final_model.pth")
         if not os.path.exists(checkpoint_path):
-            raise FileNotFoundError(f"No checkpoint model found at: {checkpoint_dir}")
+            legacy_name = legacy_map.get(algo_name, algo_name)
+            checkpoint_path = os.path.join(checkpoint_dir, f"{legacy_name}_final_model.pth")
+            if not os.path.exists(checkpoint_path):
+                raise FileNotFoundError(f"No checkpoint model found at: {checkpoint_dir}")
 
     agent.load(checkpoint_path)
 

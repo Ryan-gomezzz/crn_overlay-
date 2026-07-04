@@ -6,7 +6,7 @@ This document provides a comparative analysis of the three reinforcement learnin
 
 ## 1. Architectural Comparison Matrix
 
-| Feature | T3 | Underlay TD3 | Overlay TD3 |
+| Feature | TD3 | Underlay TD3 | Overlay TD3 |
 | :--- | :--- | :--- | :--- |
 | **Recurrent History** | No (Markovian State) | Yes (Temporal sequence) | Yes (Temporal sequence) |
 | **History Length** | None ($L=0$) | $L=10$ steps | $L=10$ steps |
@@ -23,7 +23,7 @@ This document provides a comparative analysis of the three reinforcement learnin
 
 ```
    ┌────────────────────────────────────────────────────────┐
-   │                       T3 Baseline                      │
+   │                       TD3                      │
    │   - Flat Markovian state (instantaneous gains)         │
    │   - Scalar penalties (no Lagrangian adaptation)        │
    └───────────────────────────┬────────────────────────────┘
@@ -47,7 +47,7 @@ This document provides a comparative analysis of the three reinforcement learnin
 
 ## 3. Trade-offs & Discussion
 
-1.  **T3 (Baseline)**:
+1.  **TD3 (Baseline)**:
     *   *Pros*: Extremely low computational overhead; fast training and sub-millisecond inference.
     *   *Cons*: Fails to adapt to fast fading channel fluctuations due to lack of sequential history; experiences high outage rates because penalties are static.
 2.  **Underlay TD3**:

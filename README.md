@@ -23,9 +23,14 @@
 
 Traditional wireless spectrum allocation suffers from poor spectrum utilization due to static licensing policies. Cognitive Radio Networks (CRNs) enable intelligent spectrum sharing by allowing Secondary Users (SUs) to opportunistically utilize licensed spectrum while ensuring that Primary Users (PUs) experience minimal performance degradation.
 
-This project implements an **Overlay Cognitive Radio Network** using **Decode-and-Forward (DF) relaying** and applies **Deep Reinforcement Learning** to optimize communication performance under realistic wireless channel conditions.
-
-The framework is designed to be modular, allowing different communication models and reinforcement learning algorithms to be integrated with minimal code changes.
+This repository is a **modular reinforcement learning research framework** designed to optimize communication performance under realistic wireless channel conditions using **Decode-and-Forward (DF) relaying** and **Deep Reinforcement Learning** constraints. The framework is designed to be highly modular and supports:
+*   **Overlay Cognitive Radio Networks** simulation and protocols.
+*   **Multiple RL Agents**: Benchmarks and comparisons across different neural network architectures.
+*   **Unified Experiment Management**: Direct command-line control of training, testing, evaluations, and checkpoints.
+*   **Comparative Benchmarking**: Pre-built commands to evaluate agents side-by-side.
+*   **Multi-seed Reproducibility**: Predefined seeds to validate statistical significance.
+*   **Automated Evaluation**: Continuous validation metrics logs.
+*   **Experiment Tracking**: TensorBoard event logs and metrics snapshots automatically collected.
 
 ---
 
@@ -48,7 +53,7 @@ The repository supports multiple Reinforcement Learning agents running on a shar
 ```mermaid
 flowchart TD
 
-A[RL Agent: T3 / Underlay TD3 / Overlay TD3]
+A[RL Agent: TD3 / Underlay TD3 / Overlay TD3]
 
 B[Gymnasium Environment]
 
@@ -80,7 +85,7 @@ G --> H
 
 ### Shared Infrastructure Overview
 *   **Environment**: A Gymnasium-compatible wrapper (`envs/crn_env.py`) managing states and coordinate matrices.
-*   **Replay Buffers**: Flat transitions buffer (used by T3) and episodic sequential buffer (used by Underlay/Overlay TD3).
+*   **Replay Buffers**: Flat transitions buffer (used by TD3) and episodic sequential buffer (used by Underlay/Overlay TD3).
 *   **Neural Networks**: Base actor and critic layouts, recurrent GRU encoders, and twin value prediction heads.
 *   **Logging & Config**: Consolidated YAML configurations and unified TensorBoard summaries.
 
@@ -90,14 +95,14 @@ G --> H
 
 The repository supports three distinct reinforcement learning agents:
 
-### 1. T3 (Twin Delayed DDPG Baseline)
+### 1. TD3 (Twin Delayed DDPG Baseline)
 A standard baseline implementation for comparison:
 *   **Twin Critics**: Mitigates target value overestimation bias by tracking the minimum of two value estimators.
 *   **Delayed Policy Updates**: Updates the actor network less frequently than the critics to ensure target stability.
 *   **Target Policy Smoothing**: Adds target noise to actions to reduce Q-value function variance.
 
-### 2. Underlay TD3 (Original CAMO-TD3 adaptation)
-Fulfills the original CAMO-TD3 design methodology:
+### 2. Underlay TD3 (Original Underlay TD3 adaptation)
+Fulfills the original Underlay TD3 design methodology:
 *   **GRU Belief Encoder**: Processes historical sequences of length $L=10$ observations and actions to tackle partial observability.
 *   **Sequence Replay Buffer**: Episode-aware sampling ensuring clean boundary tracking.
 *   **Lagrangian Constrained Optimization**: Learns softplus-parameterized multipliers $\lambda_{inf}$ and $\lambda_{nrg}$ to restrict interference power and energy.
@@ -115,16 +120,23 @@ A novel custom architecture specifically redesigned for Overlay CRNs:
 
 # 🚀 Project Features
 
-*   **Standard T3 Baseline**: Benchmarking benchmark for deterministic policy gradient agents.
-*   **Underlay TD3 Agent**: Recreates the original CAMO-TD3 algorithm under standard constraints.
+*   **Standard TD3**: Benchmark for deterministic policy gradient agents.
+*   **Underlay TD3 Agent**: Recreates the original Underlay TD3 algorithm under standard constraints.
 *   **Overlay TD3 Agent**: Novel research-grade extension optimized for cooperative Decode-and-Forward networks.
 *   **Sequence Replay Buffer**: Supports flat transition indexing and sequential sampling.
 *   **GRU Belief Encoder**: Addresses Rayleigh fading partial observability.
 *   **Multi-objective Critics**: Independent value estimation for rates, violations, and energy.
 *   **Adaptive Lagrangian Optimizers**: Automatically updates constraint penalty coefficients.
 *   **Directional Exploration Bias**: Restricts constraint violations during exploratory steps.
-*   **Comparative Benchmarking**: Scripted tool to train, compare, and plot performances.
-*   **Unified Evaluation & Checkpoints**: Uniform save, load, and test pipelines.
+*   **Unified Experiment Management CLI**: Command-line control over all subcommands without editing configuration files.
+*   **Multi-agent Training & Benchmarking**: Train and compare multiple algorithms sequentially under identical experimental conditions.
+*   **Multi-seed Evaluation**: Predefined seeds to enforce reproducible, statistically sound evaluations.
+*   **Automatic Checkpointing**: Saves best-performing models and final execution states dynamically.
+*   **Automatic Report & Plot Generation**: Generates comparison plots and markdown/PDF research reports on benchmark runs.
+*   **Configuration Override from CLI**: Temporarily override YAML configuration values during launching.
+*   **Experiment Logging & TensorBoard Integration**: Comprehensive logging to text files and real-time training progress visualization on TensorBoard.
+*   **Resume Training**: Recover interrupted executions restoring optimizer states, networks, and replay buffers.
+*   **Comparative Evaluation Pipeline**: Deterministic multi-episode evaluation of model checkpoints.
 
 ---
 
@@ -244,7 +256,7 @@ CRN-RL-Framework/
 ├── agents/
 │   ├── models.py          # GRU Encoder, Actor, and Twin Critics
 │   ├── buffers.py         # Sequence Replay Buffers (flat/episodic/overlay)
-│   ├── train_td3.py       # Training logic for T3, Underlay TD3, Overlay TD3
+│   ├── train_td3.py       # Training logic for TD3, Underlay TD3, Overlay TD3
 │   ├── evaluate.py        # Standalone evaluation & checkpoint loader
 │   └── benchmark.py       # Comparative benchmarking automation
 │
@@ -307,7 +319,7 @@ Responsible for:
 Contains RL network models, training files, and comparative tools.
 
 Algorithms implemented:
-- **T3**
+- **TD3**
 - **Underlay TD3**
 - **Overlay TD3**
 
@@ -342,61 +354,227 @@ F --> G
 
 ---
 
-# 🚀 Getting Started
+# ⚙️ Experiment Management
 
-Clone the repository:
-```bash
-git clone https://github.com/your-repository/CRN-RL-Framework.git
-cd CRN-RL-Framework
+The framework eliminates the need to manually edit configuration files every time a different experiment needs to be run. Instead, it provides a powerful, flexible command-line interface (CLI) to configure, execute, benchmark, and analyze reinforcement learning models directly from the terminal.
+
+The YAML configuration (`configs/config.yaml`) remains the default source of truth containing baseline hyperparameters. Any arguments provided on the command line temporarily override the YAML defaults for the current execution only. The configuration file is never modified automatically, ensuring your baseline configurations remain clean.
+
+### Experiment Execution Workflow
+
+```mermaid
+flowchart TD
+A[CLI Command]
+B[Load Configuration]
+C[Apply CLI Overrides]
+D[Create Environment]
+E["Initialize Selected Agent(s)"]
+F[Training / Evaluation / Benchmark]
+G[Logging & Checkpointing]
+H[Plots & Reports]
+
+A --> B
+B --> C
+C --> D
+D --> E
+E --> F
+F --> G
+G --> H
 ```
 
-Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### CLI Subcommands Overview
 
-### Running Training
-Select your algorithm in `configs/config.yaml`:
-```yaml
-algorithm:
-  name: OVERLAY_TD3  # Options: T3, UNDERLAY_TD3, OVERLAY_TD3
-```
+| Command | Purpose |
+| :--- | :--- |
+| `train` | Train one or more agents sequentially |
+| `evaluate` | Evaluate trained models deterministically |
+| `benchmark` | Compare multiple algorithms under identical conditions |
+| `compare` | Generate comparison tables from experiment outputs |
+| `resume` | Resume interrupted training from the latest checkpoint |
+| `plots` | Generate plots and charts from experiment logs |
+| `report` | Generate experiment markdown and PDF reports |
+| `checkpoints` | List and inspect stored model checkpoints |
+| `config` | Display active environment and training configurations |
+| `test` | Run validation tests (unit, config, smoke) |
 
-Execute training using the entry point:
-```bash
-python main.py
-```
+---
 
-### Running Standalone Evaluation
-Evaluate the selected algorithm policy using saved checkpoints:
+# 🚀 Quick Start
+
+Use these quick examples to get started with the framework's primary commands:
+
 ```bash
-python agents/evaluate.py
+# 1. Train individual agents
+python main.py train --agent td3
+python main.py train --agent underlay
+python main.py train --agent overlay
+
+# 2. Benchmark all algorithms
+python main.py benchmark
+
+# 3. Resume training from the latest checkpoint
+python main.py resume --agent overlay
+
+# 4. Evaluate a checkpoint
+python main.py evaluate --agent overlay
+
+# 5. Run training for all three predefined research seeds
+python main.py train --agent overlay --all-seeds
 ```
 
 ---
 
-# 📊 Comparative Benchmarking
+# 🏋️ Training Guidelines
 
-The repository includes a dedicated benchmark script that trains all three agents sequentially and compares wireless performance metrics (Throughput, BER, Outage, Convergence) and computational efficiency (Training time, Inference time):
+The `train` subcommand allows you to train individual agents or sequences of agents under identical environment conditions.
 
+### Train Individual Agents
 ```bash
-python agents/benchmark.py
+python main.py train --agent td3
+python main.py train --agent underlay
+python main.py train --agent overlay
 ```
 
-The script prints a markdown summary table and writes comparison graphs inside the `plots/` directory:
-*   `plots/throughput_comparison.png`
-*   `plots/ber_comparison.png`
-*   `plots/outage_comparison.png`
-*   `plots/convergence_comparison.png`
-*   `plots/lambda_comparison.png`
-*   `plots/time_comparison.png`
+### Train Multiple Agents
+To run multiple agents sequentially:
+```bash
+python main.py train --agents td3 underlay
+python main.py train --agents td3 overlay
+python main.py train --agents underlay overlay
+python main.py train --agents td3 underlay overlay
+```
+*Note: Agents are trained sequentially under identical experimental conditions (e.g. channel fading layouts, coordinate grids) to ensure a fair and scientifically sound comparison.*
+
+---
+
+# 📊 Benchmarking & Evaluation
+
+### Multi-Agent Benchmarks
+Benchmark runs training across the selected algorithms and automatically outputs evaluation comparisons:
+```bash
+# Run default benchmark (TD3 -> Underlay TD3 -> Overlay TD3)
+python main.py benchmark
+
+# Run benchmark for a subset of algorithms
+python main.py benchmark --agents td3 overlay
+python main.py benchmark --agents underlay overlay
+python main.py benchmark --agents td3 underlay
+```
+
+### Deterministic Policy Evaluation
+Evaluate a trained model's performance over a set number of episodes:
+```bash
+python main.py evaluate --agent td3
+python main.py evaluate --agent underlay
+python main.py evaluate --agent overlay
+```
+
+### Resuming Interrupted Runs
+Resume training an agent starting from its latest checkpoint:
+```bash
+python main.py resume --agent overlay
+```
+This automatically restores:
+* **Model weights** for actor, critic, and target networks.
+* **Optimizer states** for all active networks.
+* **Lagrangian multipliers** ($\alpha$ log multipliers) and lambda optimizers where supported.
+* **Training progress** (total iterations and current episode).
+* **Replay buffer transitions** and sequence metadata.
+
+---
+
+# 🔬 Research Reproducibility & Seeds
+
+Reproducibility is critical for wireless reinforcement learning research. The framework enforces this through:
+1. **Fixed Predefined Seeds**: Enforces identical randomness allocations using the seeds:
+   * `42`
+   * `123`
+   * `2026`
+2. **Deterministic Execution**: Evaluation steps use deterministic policy actions (no exploration noise).
+3. **Identical Environments**: Comparative runs share identical path loss, coordinate matrices, and channel noise layouts.
+
+### Predefined Seed Examples
+```bash
+python main.py train --agent overlay --seed 42
+python main.py benchmark --seed 123
+```
+
+### Evaluating All Seeds
+To run the same experiment across all three predefined seeds sequentially:
+```bash
+python main.py benchmark --all-seeds
+python main.py train --agent overlay --all-seeds
+```
+Using `--all-seeds` automatically executes experiments using all three seeds and reports:
+* **Mean Return**
+* **Standard Deviation (Std)**
+* **Best Performance**
+* **Worst Performance**
+
+---
+
+# 🎛 Command-Line Overrides & Validation
+
+Every key environment and training parameter can be temporarily overridden from the command line:
+```bash
+# Train Overlay TD3 with 5000 episodes and 2000 environment steps
+python main.py train --agent overlay --episodes 5000 --steps 2000 --seed 42
+
+# Train TD3 with custom batch size on GPU
+python main.py train --agent td3 --batch-size 512 --device cuda
+```
+
+### Episode & Step Constraints
+To ensure consistent research metrics and prevent excessive memory allocation, the CLI enforces the following constraints:
+* **Training Episodes**:
+  * Default: `2000` episodes
+  * Minimum limit: `500` episodes
+  * Maximum limit: `5000` episodes
+* **Environment Steps per Episode**:
+  * Default: `500` steps
+  * Minimum limit: `200` steps
+  * Maximum limit: `2000` steps
+
+---
+
+# 📂 Experiment Outputs & Directory Structure
+
+All run files, models, and charts are stored inside the configured output directory (default: `experiments/`):
+
+```text
+experiments/
+├── td3/             # Outputs for TD3 runs
+├── underlay_td3/    # Outputs for Underlay TD3 runs
+├── overlay_td3/     # Outputs for Overlay TD3 runs
+├── checkpoints/     # Centralized folder for latest agent model checkpoints
+├── tensorboard/     # Summarized TensorBoard event logs
+├── logs/            # Plain-text execution run logs
+├── plots/           # Generated performance charts & comparison figures
+├── reports/         # Exported markdown and PDF summaries
+└── benchmarks/      # Consolidated benchmark metrics
+```
+
+### Directory Purposes
+* **Algorithm-specific folders (`td3/`, etc.)**: Store individual run parameters, checkpoints, config snapshots, and local metrics.
+* **`checkpoints/`**: Houses model state dictionaries (`latest.pth`) and serialized replay buffers (`latest_replay.pkl`) to support training resumption.
+* **`plots/`**: Stores figures generated by report compiling (e.g. throughput comparison, outage, and convergence).
+* **`reports/`**: Holds generated markdown (`research_report.md`) and PDF documents compiling returns and computational efficiency.
+
+Every experiment run automatically archives:
+1. **Configuration snapshot** (`config_snapshot.yaml`)
+2. **Text logs** (`train.log`)
+3. **Model checkpoints** (`best_model.pth` and `final_model.pth`)
+4. **TensorBoard logs** (`events.out.tfevents.*`)
+5. **Evaluation metrics** (`metrics.json` mapping rewards, SU throughput, and PU outage)
+6. **Comparison plots** and generated reports.
+```
 
 ---
 
 # 🔬 Research Contributions
 
-*   **T3 Implementation**: Standard twin-critic policy gradient baseline.
-*   **Underlay TD3 Agent**: Adaption of original CAMO-TD3 constraints formulation.
+*   **TD3 Implementation**: Standard twin-critic policy gradient baseline.
+*   **Underlay TD3 Agent**: Adaption of original Underlay TD3 constraints formulation.
 *   **Overlay TD3 Model**: Novel custom extension addressing partial observability and strict cooperative license constraints.
 *   **Unified Benchmarking Framework**: Direct comparative environment comparing RL agents on identical scenarios.
 
@@ -406,7 +584,7 @@ The script prints a markdown summary table and writes comparison graphs inside t
 
 For additional design details, audit structures, and reports:
 *   [OVERLAY_CAMO_DESIGN.md](file:///d:/Mini%20Project/crn_overlay-/OVERLAY_CAMO_DESIGN.md) — Mathematical redesign derivations.
-*   [PHASE1_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of CAMO-TD3.
+*   [PHASE1_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of Underlay TD3.
 *   [PHASE2_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE2_IMPLEMENTATION_REPORT.md) — Implementation details of Overlay TD3.
 *   [IMPLEMENTATION_AUDIT_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/IMPLEMENTATION_AUDIT_REPORT.md) — Repository structural and mathematical audit.
 *   [FINAL_CHECKLIST.md](file:///d:/Mini%20Project/crn_overlay-/FINAL_CHECKLIST.md) — Verification checklist matrix.
@@ -420,7 +598,7 @@ For additional design details, audit structures, and reports:
 - [x] Mathematical System Model
 - [x] Communication Simulator
 - [x] Gymnasium Environment
-- [x] T3 Baseline Implementation
+- [x] TD3 Implementation
 - [x] Underlay TD3 Implementation
 - [x] Overlay TD3 Design & Implementation
 - [x] Performance Evaluation & Comparative Benchmarks
@@ -437,7 +615,7 @@ For additional design details, audit structures, and reports:
 | Ryan | System Model, Repository Architecture, Gymnasium Integration, Final Integration |
 | Sneha | Wireless Channel Models, Rayleigh Fading, Path Loss, Noise Model |
 | Shreya | Relay Protocol, SINR, Time Slot Logic, Interference Model |
-| Aditya | RL Algorithms, T3/Underlay/Overlay Agents, Training & Evaluation |
+| Aditya | RL Algorithms, TD3/Underlay/Overlay Agents, Training & Evaluation |
 
 ---
 

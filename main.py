@@ -1,20 +1,25 @@
 """
 Entry point for the CRN-RL-Framework.
-Author: Ryan
 """
-import argparse
+
 import sys
 import os
-
+import random
+import yaml
+import numpy as np
+import torch
+import argparse
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="CRN-RL Framework")
+    parser = argparse.ArgumentParser(description="CRN-RL Framework - Legacy mode")
     parser.add_argument("--config", type=str, default="configs/config.yaml", help="Path to base configuration file.")
     parser.add_argument("--experiment", type=str, default=None, help="Path to experiment override configuration file.")
     parser.add_argument("--test", action="store_true", help="Run a quick environment sanity check.")
     parser.add_argument("--info", action="store_true", help="Print system information and exit.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed.")
-    return parser.parse_args()
+    # Add a fallback for unknown args to not break Aditya's CLI
+    args, unknown = parser.parse_known_args()
+    return args
 
 
 def run_sanity_check():
@@ -58,16 +63,6 @@ def print_system_info():
     except ImportError:
         print("Gymnasium is not installed.")
 
-import os
-import random
-import yaml
-import numpy as np
-import torch
-from torch.utils.tensorboard import SummaryWriter
-
-from envs.crn_env import OverlayCRNEnv
-from agents.train_td3 import TD3Agent
-
 
 def set_seed(seed: int):
     """
@@ -80,7 +75,7 @@ def set_seed(seed: int):
         torch.cuda.manual_seed_all(seed)
 
 
-def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> dict:
+def evaluate_policy(agent, env, episodes: int = 5) -> dict:
     """
     Evaluate agent policy deterministically over multiple episodes.
     """
@@ -96,7 +91,7 @@ def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> d
         "constraint_satisfaction": [],
     }
 
-    energy_limit = env.energy_limit
+    energy_limit = env.energy_limit if hasattr(env, 'energy_limit') else 1.0
 
     for _ in range(episodes):
         obs, info = env.reset()
@@ -114,24 +109,23 @@ def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> d
         ep_constraint_satisfaction = []
 
         while not (done or truncated):
-            # Deterministic action selection (explore=False)
             action = agent.select_action(obs, info, explore=False)
             obs, reward, done, truncated, info = env.step(action)
             episode_reward += reward
 
-            ep_throughput_s.append(info["throughput_reward"])
-            ep_throughput_p.append(info["primary_throughput"])
-            ep_outage.append(info["outage"])
-            ep_ber.append(info["ber"])
-            ep_average_power.append(info["average_power"])
+            ep_throughput_s.append(info.get("throughput_reward", 0))
+            ep_throughput_p.append(info.get("primary_throughput", 0))
+            ep_outage.append(info.get("outage", 0))
+            ep_ber.append(info.get("ber", 0))
+            ep_average_power.append(info.get("average_power", 0))
 
             dec = info.get("relay_decoded", 0.0)
             ep_relay_success.append(dec)
 
-            qos_sat = 1.0 if info["outage"] == 0.0 else 0.0
+            qos_sat = 1.0 if info.get("outage", 0) == 0.0 else 0.0
             ep_qos_satisfaction.append(qos_sat)
 
-            con_sat = 1.0 if (info["outage"] == 0.0 and info["average_power"] <= energy_limit) else 0.0
+            con_sat = 1.0 if (info.get("outage", 0) == 0.0 and info.get("average_power", 0) <= energy_limit) else 0.0
             ep_constraint_satisfaction.append(con_sat)
 
         eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
@@ -144,14 +138,16 @@ def evaluate_policy(agent: TD3Agent, env: OverlayCRNEnv, episodes: int = 5) -> d
         eval_metrics["constraint_satisfaction"].append(np.mean(ep_constraint_satisfaction))
         eval_metrics["total_reward"].append(episode_reward)
 
-    # Average metrics
     avg_metrics = {k: float(np.mean(v)) for k, v in eval_metrics.items()}
     return avg_metrics
 
 
-def main():
+def main_legacy():
+    """
+    Legacy run flow.
+    """
     args = parse_args()
-    
+
     # Ensure the root path is in sys.path
     root_dir = os.path.dirname(os.path.abspath(__file__))
     if root_dir not in sys.path:
@@ -164,6 +160,20 @@ def main():
     else:
         from experiments.pipeline import run_experiment
         run_experiment(args.config, args.experiment)
+
+
+def main():
+    # If standard CLI arguments are used that belong to Aditya's CLI, route to it.
+    # Otherwise run legacy logic.
+    if len(sys.argv) > 1 and sys.argv[1] in ["train", "eval", "benchmark", "hyperopt"]:
+        # Run Aditya's CLI flow
+        from cli.parser import get_parser
+        from cli.runner import execute_cli
+        parser = get_parser()
+        args = parser.parse_args()
+        execute_cli(args)
+    else:
+        main_legacy()
 
 
 if __name__ == "__main__":

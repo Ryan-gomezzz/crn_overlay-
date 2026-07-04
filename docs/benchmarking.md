@@ -1,6 +1,6 @@
 # Benchmarking and Evaluation
 
-This document outlines the comparative benchmarking and evaluation pipeline implemented in the repository to assess **T3**, **Underlay TD3**, and **Overlay TD3** agents under identical wireless conditions.
+This document outlines the comparative benchmarking and evaluation pipeline implemented in the repository to assess **TD3**, **Underlay TD3**, and **Overlay TD3** agents under identical wireless conditions.
 
 ---
 
@@ -30,7 +30,7 @@ python agents/benchmark.py
 ```
 
 ### Execution Flow
-1.  **TD3 baseline run**: Trains standard T3 for 600 steps, recording evaluation milestones. Saves model checkpoint.
+1.  **TD3 baseline run**: Trains standard TD3 for 600 steps, recording evaluation milestones. Saves model checkpoint.
 2.  **Underlay TD3 run**: Trains recurrent Underlay TD3 under co-channel interference and energy limit constraints.
 3.  **Overlay TD3 run**: Trains recurrent Overlay TD3 under direct primary user QoS constraints and energy limit constraints.
 4.  **Plots generation**: Aggregates records and saves comparative matplotlib plots under the `plots/` directory.

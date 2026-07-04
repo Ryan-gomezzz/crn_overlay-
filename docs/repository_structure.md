@@ -15,8 +15,8 @@ CRN-RL-Framework/
 │
 ├── docs/                    # Technical specifications and guides
 │   ├── agents/
-│   │   ├── T3.md            # T3 baseline guide
-│   │   ├── UNDERLAY_TD3.md  # Underlay TD3 (Original CAMO-TD3) guide
+│   │   ├── TD3.md            # TD3 baseline guide
+│   │   ├── UNDERLAY_TD3.md  # Underlay TD3 (Original Underlay TD3) guide
 │   │   └── OVERLAY_TD3.md   # Overlay TD3 guide
 │   ├── architecture.md
 │   ├── gymnasium_design.md

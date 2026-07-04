@@ -1,4 +1,4 @@
-# Overlay TD3 (Overlay-optimized CAMO-TD3)
+# Overlay TD3 (Overlay TD3)
 
 **Overlay TD3** is a novel research-grade reinforcement learning agent specifically redesigned to optimize secondary user access inside cooperative Decode-and-Forward (DF) Overlay Cognitive Radio Networks.
 

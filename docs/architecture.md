@@ -14,7 +14,7 @@ The Overlay Cognitive Radio Network RL framework consists of modular components 
                                       ▼
 ┌──────────────────┐      ┌───────────────────────┐
 │     Agent API    │◄────►│ Gymnasium Environment │
-│ (T3/Underlay/    │      │   (envs/crn_env.py)   │
+│ (TD3/Underlay/    │      │   (envs/crn_env.py)   │
 │  Overlay TD3)    │      └───────────┬───────────┘
 └────────┬─────────┘                  │
          │                            ▼
@@ -44,7 +44,7 @@ All three agents utilize a unified communication pipeline:
 
 ## 3. Agent Architecture Differences
 
-### 3.1. T3 (Baseline)
+### 3.1. TD3 (Baseline)
 *   **State Space**: Flat 4D channel gains.
 *   **Buffer**: Flat Transition Buffer.
 *   **Critics**: 1 Twin Critic pair assessing secondary throughput.

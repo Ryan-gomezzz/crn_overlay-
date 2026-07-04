@@ -36,5 +36,5 @@ The step returns individual objective feedback returned inside `info`:
 *   **Interference Reward ($r_{inf}$)**: Negative total co-channel interference power at the PR node (used by Underlay TD3).
 *   **Primary Throughput Reward ($r_{qos}$)**: Primary capacity rate $R_p$ (used by Overlay TD3 as QoS constraint).
 *   **Energy Reward ($r_{nrg}$)**: Negative average power consumed over the slots ($0.5 P_{s1} + 0.5 P_{rel}$).
-*   **Standard Scalar Reward ($r_{scalar}$)**: Used by the baseline T3 agent, combining goals via fixed penalty coefficients:
+*   **Standard Scalar Reward ($r_{scalar}$)**: Used by the baseline TD3 agent, combining goals via fixed penalty coefficients:
     $$r_{scalar} = R_s - \alpha_{inf} \max(0, I_{PR} - I_{limit}) - \alpha_{nrg} \max(0, E - E_{limit})$$

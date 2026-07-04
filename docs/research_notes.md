@@ -10,7 +10,7 @@ The repository traces a progression of three paradigms in spectrum-sharing optim
 
 ```
                   ┌──────────────────────────────┐
-                  │              T3              │
+                  │              TD3              │
                   │ (Standard flat, no safety)   │
                   └──────────────┬───────────────┘
                                  │ Recurrence & Limits
@@ -27,8 +27,8 @@ The repository traces a progression of three paradigms in spectrum-sharing optim
                   └──────────────────────────────┘
 ```
 
-1.  **Baseline T3**: Validates that flat, standard policy gradient networks struggle under Rayleigh channel fluctuations. The lack of memory results in frequent outages since fading history is neglected.
-2.  **Underlay TD3 (Original CAMO-TD3)**: Integrates GRU sequence history to handle partial observability. Evaluates soft constraints w.r.t physical limitations (interference power $I_{PR} \le I_{limit}$).
+1.  **Baseline TD3**: Validates that flat, standard policy gradient networks struggle under Rayleigh channel fluctuations. The lack of memory results in frequent outages since fading history is neglected.
+2.  **Underlay TD3 (Original Underlay TD3)**: Integrates GRU sequence history to handle partial observability. Evaluates soft constraints w.r.t physical limitations (interference power $I_{PR} \le I_{limit}$).
 3.  **Overlay TD3**: Novel contribution. Rather than proxy bounds, it implements direct primary Quality of Service rate tracking ($R_p \ge R_{threshold}$) using a dedicated QoS Critic pair, feeding previous relay decoding success status back to the belief encoder to coordinate cooperative power splits.
 
 ---
@@ -38,7 +38,7 @@ The repository traces a progression of three paradigms in spectrum-sharing optim
 If preparing a submission to IEEE transactions or letters, we recommend framing the research under the following headings:
 
 ### 2.1. Dynamic Fading Partial Observability
-*   Show how recurrent state representation ($L=10$) outperforms memoryless baselines (T3) under rapid block fading.
+*   Show how recurrent state representation ($L=10$) outperforms memoryless baselines (TD3) under rapid block fading.
 *   Present BER and SU throughput improvements when memory is active.
 
 ### 2.2. QoS Guarantee in Cooperative Networks

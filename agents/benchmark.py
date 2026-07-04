@@ -91,10 +91,10 @@ def run_experiment(algo_name: str, total_steps: int = 600, eval_interval: int = 
             history["average_power"].append(eval_metrics["average_power"])
             
             # Record Lagrangian values
-            if algo_name == "OVERLAY_CAMO_TD3":
+            if algo_name == "OVERLAY_TD3":
                 history["lambda_qos"].append(agent.lambda_qos)
                 history["lambda_nrg"].append(agent.lambda_nrg)
-            elif algo_name == "CAMO_TD3":
+            elif algo_name == "UNDERLAY_TD3":
                 history["lambda_inf"].append(agent.lambda_inf)
                 history["lambda_nrg"].append(agent.lambda_nrg)
                 
@@ -126,7 +126,7 @@ def generate_plots(results):
     algos = list(results.keys())
     
     # Color palette
-    colors = {"TD3": "#e74c3c", "CAMO_TD3": "#3498db", "OVERLAY_CAMO_TD3": "#2ecc71"}
+    colors = {"TD3": "#e74c3c", "UNDERLAY_TD3": "#3498db", "OVERLAY_TD3": "#2ecc71"}
     
     # 1. Throughput Comparison
     plt.figure()
@@ -179,13 +179,13 @@ def generate_plots(results):
     
     # 5. Lagrangian Multipliers comparison
     plt.figure()
-    if "CAMO_TD3" in results:
-        h = results["CAMO_TD3"]["history"]
-        plt.plot(h["steps"], h["lambda_nrg"], label="CAMO-TD3 Energy Multiplier", color="#34495e", linestyle="--")
-    if "OVERLAY_CAMO_TD3" in results:
-        h = results["OVERLAY_CAMO_TD3"]["history"]
-        plt.plot(h["steps"], h["lambda_qos"], label="OVERLAY QoS Multiplier", color="#2ecc71", linestyle="-")
-        plt.plot(h["steps"], h["lambda_nrg"], label="OVERLAY Energy Multiplier", color="#27ae60", linestyle=":")
+    if "UNDERLAY_TD3" in results:
+        h = results["UNDERLAY_TD3"]["history"]
+        plt.plot(h["steps"], h["lambda_nrg"], label="Underlay TD3 Energy Multiplier", color="#34495e", linestyle="--")
+    if "OVERLAY_TD3" in results:
+        h = results["OVERLAY_TD3"]["history"]
+        plt.plot(h["steps"], h["lambda_qos"], label="Overlay TD3 QoS Multiplier", color="#2ecc71", linestyle="-")
+        plt.plot(h["steps"], h["lambda_nrg"], label="Overlay TD3 Energy Multiplier", color="#27ae60", linestyle=":")
     plt.xlabel("Training Steps")
     plt.ylabel("Lagrangian Multiplier Value")
     plt.title("Lagrangian Multipliers Convergence")
@@ -220,7 +220,7 @@ def generate_plots(results):
 def main():
     results = {}
     
-    for name in ["TD3", "CAMO_TD3", "OVERLAY_CAMO_TD3"]:
+    for name in ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]:
         history, train_time, inf_time = run_experiment(name, total_steps=600, eval_interval=100)
         results[name] = {
             "history": history,
