@@ -532,12 +532,12 @@ def handle_benchmark(args: Any):
             
     # Generate final summary plots & report
     output_dir = args.output_dir
-    plots_dir = os.path.join(output_dir, "plots")
+    results_dir = os.path.join(os.getcwd(), "results")
     reports_dir = os.path.join(output_dir, "reports")
     
     print("\nGenerating benchmark plots...")
-    generate_comparison_plots(output_dir, plots_dir)
-    print(f"Plots saved to: {plots_dir}")
+    generate_comparison_plots(output_dir, results_dir)
+    print(f"Plots saved to: {results_dir}")
     
     print("Generating benchmark markdown report...")
     report_path = generate_markdown_report(output_dir, reports_dir)
