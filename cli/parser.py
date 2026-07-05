@@ -39,8 +39,8 @@ def validate_episodes(val: str) -> int:
         ival = int(val)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Episodes must be an integer, got '{val}'")
-    if ival < 100 or ival > 5000:
-        raise argparse.ArgumentTypeError(f"Episodes must be between 100 and 5000 (inclusive), got {ival}")
+    if not (1 <= ival <= 50000):
+        raise argparse.ArgumentTypeError(f"Episodes must be between 1 and 50000 (inclusive), got {ival}")
     return ival
 
 def validate_steps(val: str) -> int:
@@ -76,7 +76,7 @@ def str_to_bool(val: str) -> bool:
 
 def add_common_overrides(parser: argparse.ArgumentParser):
     """Add training/execution parameters overrides to parser."""
-    parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Number of training episodes (500-5000)")
+    parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Number of training episodes (1-50000)")
     parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
     parser.add_argument("--seed", type=validate_seed, help=f"Random seed to use {VALID_SEEDS}")
     parser.add_argument("--all-seeds", action="store_true", help="Run execution over all valid seeds (42, 123, 2026)")
@@ -127,7 +127,7 @@ def get_parser() -> argparse.ArgumentParser:
     bench_parser.add_argument("--all-seeds", action="store_true", help="Run benchmark across all predefined seeds")
     bench_parser.add_argument("--device", choices=["cpu", "cuda"], help="Computation device (cpu or cuda)")
     bench_parser.add_argument("--output-dir", type=str, default="experiments", help="Base output directory")
-    bench_parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Episodes per agent in benchmark (500-5000)")
+    bench_parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Episodes per agent in benchmark (1-50000)")
     bench_parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
 
     # 4. Compare Subcommand
