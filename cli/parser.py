@@ -39,8 +39,8 @@ def validate_episodes(val: str) -> int:
         ival = int(val)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Episodes must be an integer, got '{val}'")
-    if not (500 <= ival <= 5000):
-        raise argparse.ArgumentTypeError(f"Episodes must be between 500 and 5000 (inclusive), got {ival}")
+    if ival < 100 or ival > 5000:
+        raise argparse.ArgumentTypeError(f"Episodes must be between 100 and 5000 (inclusive), got {ival}")
     return ival
 
 def validate_steps(val: str) -> int:
