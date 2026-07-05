@@ -236,9 +236,19 @@ class OverlaySimulator(BaseSimulator):
         # ==============================================================
         signal_pt_pr_1 = p_pt * g.get("pt_pr", 0.0)
         signal_su_relay = p_su * g.get("su_relay", 0.0)
+        signal_pt_relay = p_pt * g.get("pt_relay", 0.0)
 
-        # SNR at relay for decoding decision
-        snr_at_relay = signal_su_relay / noise if noise > 0 else 0.0
+        # NOMA SIC at Relay: Attempt to decode PT's signal first
+        tau_p = (2.0 ** (2.0 * cfg.camo_td3.get("pu_rate_threshold", 0.5))) - 1.0
+        sinr_pt_at_relay = signal_pt_relay / (signal_su_relay + noise) if (signal_su_relay + noise) > 0 else 0.0
+        
+        if sinr_pt_at_relay >= tau_p:
+            # PT decoded and cancelled via SIC
+            snr_at_relay = signal_su_relay / noise if noise > 0 else 0.0
+        else:
+            # SIC failed, treat PT as noise
+            snr_at_relay = signal_su_relay / (signal_pt_relay + noise) if (signal_pt_relay + noise) > 0 else 0.0
+
         relay_decoded = self.relay_model.can_decode(snr_at_relay)
 
         # ==============================================================
@@ -257,7 +267,7 @@ class OverlaySimulator(BaseSimulator):
         signal_pu = 0.5 * (signal_pt_pr_1 + signal_pt_pr_2)
 
         # ==============================================================
-        # Interference
+        # Interference & NOMA SIC at Primary Receiver (PR)
         # ==============================================================
         powers: Dict[str, float] = {
             "su": p_su,
@@ -268,17 +278,27 @@ class OverlaySimulator(BaseSimulator):
             powers, g
         )
         interference_at_pr = interference.get("pr", 0.0)
-        interference_at_sud = interference.get("sud", 0.0)
+        
+        # PR NOMA SIC: Try to decode SU interference first (unlikely but possible if SU is very strong)
+        tau_s = (2.0 ** (2.0 * cfg.camo_td3.get("decoding_threshold", 0.1))) - 1.0
+        sinr_su_at_pr = interference_at_pr / (signal_pu + noise) if (signal_pu + noise) > 0 else 0.0
+        if sinr_su_at_pr >= tau_s:
+            sinr_pu = self.metrics.compute_sinr(signal_pu, 0.0, noise)
+        else:
+            sinr_pu = self.metrics.compute_sinr(signal_pu, interference_at_pr, noise)
 
         # ==============================================================
-        # Metrics
+        # NOMA SIC at SU Destination (SUN)
         # ==============================================================
-        sinr_pu = self.metrics.compute_sinr(
-            signal_pu, interference_at_pr, noise
-        )
-        sinr_su = self.metrics.compute_sinr(
-            signal_relay_sud, interference_at_sud, noise
-        )
+        interference_at_sud = interference.get("sud", 0.0) # This is PT -> SUN interference
+        
+        sinr_pt_at_sud = interference_at_sud / (signal_relay_sud + noise) if (signal_relay_sud + noise) > 0 else 0.0
+        if sinr_pt_at_sud >= tau_p:
+            # PT decoded and cancelled via SIC
+            sinr_su = self.metrics.compute_sinr(signal_relay_sud, 0.0, noise)
+        else:
+            # SIC failed, treat PT as noise
+            sinr_su = self.metrics.compute_sinr(signal_relay_sud, interference_at_sud, noise)
 
         su_throughput = self.metrics.compute_throughput(
             sinr_su, cfg.bandwidth
