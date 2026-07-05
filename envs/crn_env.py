@@ -155,6 +155,16 @@ class OverlayCRNEnv(gym.Env):
         self._step_count += 1
         self._episode_reward += result.reward
 
+        # Build the info dictionary with correct keys expected by logging and buffers
+        info = dict(result.info)
+        info["episode_reward"] = self._episode_reward
+        info["episode_length"] = self._step_count
+        
+        info["throughput_reward"] = info.get("su_throughput", 0.0)
+        info["primary_throughput"] = info.get("pu_throughput", 0.0)
+        info["average_power"] = (info.get("p_su", 0.0) + info.get("p_relay", 0.0)) / 2.0
+        info["outage"] = 1.0 if info.get("interference_at_pr", 0.0) > getattr(self._config, "interference_threshold", 0.1) else 0.0
+
         # Update histories
         self._act_history = np.roll(self._act_history, -1, axis=0)
         self._act_history[-1] = action
@@ -163,15 +173,11 @@ class OverlayCRNEnv(gym.Env):
         self._obs_history[-1] = result.observation
 
         self._dec_history = np.roll(self._dec_history, -1, axis=0)
-        self._dec_history[-1] = [float(result.info.get("relay_decoded", 0.0))]
+        self._dec_history[-1] = [float(info.get("relay_decoded", 0.0))]
 
         self._out_history = np.roll(self._out_history, -1, axis=0)
-        self._out_history[-1] = [float(result.info.get("outage", 0.0))]
+        self._out_history[-1] = [info["outage"]]
 
-        # Add cumulative info
-        info = dict(result.info)
-        info["episode_reward"] = self._episode_reward
-        info["episode_length"] = self._step_count
         info["obs_history"] = self._obs_history.copy()
         info["act_history"] = self._act_history.copy()
         info["dec_history"] = self._dec_history.copy()
