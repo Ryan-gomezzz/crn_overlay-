@@ -239,7 +239,8 @@ class OverlaySimulator(BaseSimulator):
         signal_pt_relay = p_pt * g.get("pt_relay", 0.0)
 
         # NOMA SIC at Relay: Attempt to decode PT's signal first
-        tau_p = (2.0 ** (2.0 * cfg.camo_td3.get("pu_rate_threshold", 0.5))) - 1.0
+        pu_rate = getattr(cfg, "pu_rate_threshold", 0.5)
+        tau_p = (2.0 ** (2.0 * pu_rate)) - 1.0
         sinr_pt_at_relay = signal_pt_relay / (signal_su_relay + noise) if (signal_su_relay + noise) > 0 else 0.0
         
         if sinr_pt_at_relay >= tau_p:
@@ -280,7 +281,8 @@ class OverlaySimulator(BaseSimulator):
         interference_at_pr = interference.get("pr", 0.0)
         
         # PR NOMA SIC: Try to decode SU interference first (unlikely but possible if SU is very strong)
-        tau_s = (2.0 ** (2.0 * cfg.camo_td3.get("decoding_threshold", 0.1))) - 1.0
+        dec_thresh = getattr(cfg, "decoding_threshold", 0.1)
+        tau_s = (2.0 ** (2.0 * dec_thresh)) - 1.0
         sinr_su_at_pr = interference_at_pr / (signal_pu + noise) if (signal_pu + noise) > 0 else 0.0
         if sinr_su_at_pr >= tau_s:
             sinr_pu = self.metrics.compute_sinr(signal_pu, 0.0, noise)
