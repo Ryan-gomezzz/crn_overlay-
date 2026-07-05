@@ -53,8 +53,10 @@ def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, A
     return metrics_list
 
 def generate_comparison_plots(experiments_dir: str, output_plots_dir: str):
-    """Generate professional Matplotlib comparison plots from stored metrics."""
+    """Generate professional Matplotlib comparison plots and save to a single PDF."""
+    from matplotlib.backends.backend_pdf import PdfPages
     os.makedirs(output_plots_dir, exist_ok=True)
+    pdf_path = os.path.join(output_plots_dir, "benchmark_comparison.pdf")
     
     # Load all metrics
     agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
@@ -62,114 +64,89 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str):
     for agent in agents:
         metrics_by_agent[agent] = load_metrics_for_agent(experiments_dir, agent)
 
-    # 1. Convergence Curve (Episode rewards)
-    plt.figure(figsize=(10, 6))
-    for agent in agents:
-        runs = metrics_by_agent[agent]
-        if not runs:
-            continue
-        
-        # We can align by episode steps or use the run that has history
-        # Let's check if there is an episode history
-        all_rewards = []
-        for run in runs:
-            if "history" in run and "rewards" in run["history"]:
-                all_rewards.append(run["history"]["rewards"])
-        
-        if all_rewards:
-            # Pad/truncate to same length
-            min_len = min(len(r) for r in all_rewards)
-            trimmed_rewards = [r[:min_len] for r in all_rewards]
-            mean_rewards = np.mean(trimmed_rewards, axis=0)
-            std_rewards = np.std(trimmed_rewards, axis=0)
+    with PdfPages(pdf_path) as pdf:
+        # Helper function to plot a specific metric
+        def plot_metric(metric_key: str, title: str, ylabel: str, marker: str):
+            plt.figure(figsize=(10, 6))
+            plotted = False
+            for agent in agents:
+                runs = metrics_by_agent[agent]
+                if not runs:
+                    continue
+                
+                all_metric = []
+                for run in runs:
+                    if "history" in run and metric_key in run["history"]:
+                        all_metric.append(run["history"][metric_key])
+                
+                if all_metric:
+                    min_len = min(len(r) for r in all_metric)
+                    if min_len == 0:
+                        continue
+                    trimmed = [r[:min_len] for r in all_metric]
+                    mean_val = np.mean(trimmed, axis=0)
+                    std_val = np.std(trimmed, axis=0)
+                    
+                    steps = np.arange(1, min_len + 1)
+                    plt.plot(steps, mean_val, label=SHORT_NAMES[agent], color=COLORS[agent], marker=marker, markevery=max(1, min_len//10), linewidth=2)
+                    plt.fill_between(steps, mean_val - std_val, mean_val + std_val, color=COLORS[agent], alpha=0.15)
+                    plotted = True
             
-            episodes = np.arange(1, min_len + 1)
-            plt.plot(episodes, mean_rewards, label=SHORT_NAMES[agent], color=COLORS[agent], linewidth=2)
-            plt.fill_between(episodes, mean_rewards - std_rewards, mean_rewards + std_rewards, color=COLORS[agent], alpha=0.15)
-            
-    plt.xlabel("Episodes", fontsize=12)
-    plt.ylabel("Episode Return", fontsize=12)
-    plt.title("Policy Convergence & Training Returns", fontsize=14, fontweight="bold")
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.legend(fontsize=10)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_plots_dir, "convergence_comparison.png"), dpi=150)
-    plt.close()
+            if plotted:
+                plt.xlabel("Evaluation Milestones", fontsize=12)
+                plt.ylabel(ylabel, fontsize=12)
+                plt.title(title, fontsize=14, fontweight="bold")
+                plt.grid(True, linestyle="--", alpha=0.6)
+                plt.legend(fontsize=10)
+                plt.tight_layout()
+                pdf.savefig()
+            plt.close()
 
-    # 2. SU Throughput vs Outage Tradeoff
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-    
-    for agent in agents:
-        runs = metrics_by_agent[agent]
-        if not runs:
-            continue
+        # 1. Reward vs Episodes
+        plot_metric("rewards", "Policy Convergence & Training Returns", "Episode Return", "o")
         
-        all_th = []
-        all_out = []
-        for r in runs:
-            if "history" in r:
-                if "throughput_s" in r["history"]:
-                    all_th.append(r["history"]["throughput_s"])
-                if "outage" in r["history"]:
-                    all_out.append(r["history"]["outage"])
+        # 2. SU Throughput vs Episodes
+        plot_metric("throughput_s", "Secondary User (SU) Average Throughput", "SU Throughput (bps/Hz)", "s")
         
-        if all_th and all_out:
-            min_len = min(len(all_th), len(all_out))
-            min_steps = min(len(x) for x in all_th[:min_len])
-            th_arr = np.mean([x[:min_steps] for x in all_th], axis=0)
-            out_arr = np.mean([x[:min_steps] for x in all_out], axis=0)
-            steps = np.arange(1, min_steps + 1)
-            
-            ax1.plot(steps, th_arr, label=SHORT_NAMES[agent], color=COLORS[agent], marker='o', markevery=max(1, min_steps//10))
-            ax2.plot(steps, out_arr, label=SHORT_NAMES[agent], color=COLORS[agent], marker='s', markevery=max(1, min_steps//10))
+        # 3. PU Outage vs Episodes
+        plot_metric("outage", "Primary User (PU) QoS Outage Rate", "PU Outage Rate", "^")
+        
+        # 4. SU Outage vs Episodes
+        plot_metric("su_outage", "Secondary User (SU) Outage Rate", "SU Outage Rate", "d")
+        
+        # 5. BER vs Episodes
+        plot_metric("ber", "Average Bit Error Rate (BER)", "BER", "x")
 
-    ax1.set_xlabel("Evaluation Milestones", fontsize=11)
-    ax1.set_ylabel("SU Throughput (bps/Hz)", fontsize=11)
-    ax1.set_title("Secondary User (SU) Average Throughput", fontsize=12, fontweight="bold")
-    ax1.grid(True, linestyle="--", alpha=0.5)
-    ax1.legend()
-
-    ax2.set_xlabel("Evaluation Milestones", fontsize=11)
-    ax2.set_ylabel("PU Outage Rate", fontsize=11)
-    ax2.set_title("Primary User (PU) QoS Outage Rate", fontsize=12, fontweight="bold")
-    ax2.grid(True, linestyle="--", alpha=0.5)
-    ax2.legend()
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_plots_dir, "metrics_comparison.png"), dpi=150)
-    plt.close()
-
-    # 3. Bar Chart of Computation Speeds (Train & Inference)
-    plt.figure(figsize=(10, 5))
-    available_agents = [a for a in agents if metrics_by_agent[a]]
-    if available_agents:
-        train_times = []
-        inf_times = []
-        for agent in available_agents:
-            t_times = [r.get("train_time", 0.0) for r in metrics_by_agent[agent] if r.get("train_time")]
-            i_times = [r.get("inf_time", 0.0) * 1000.0 for r in metrics_by_agent[agent] if r.get("inf_time")] # ms
+        # 6. Bar Chart of Computation Speeds
+        plt.figure(figsize=(10, 5))
+        available_agents = [a for a in agents if metrics_by_agent[a]]
+        if available_agents:
+            train_times = []
+            inf_times = []
+            for agent in available_agents:
+                t_times = [r.get("train_time", 0.0) for r in metrics_by_agent[agent] if r.get("train_time")]
+                i_times = [r.get("inf_time", 0.0) * 1000.0 for r in metrics_by_agent[agent] if r.get("inf_time")] # ms
+                train_times.append(np.mean(t_times) if t_times else 0.0)
+                inf_times.append(np.mean(i_times) if i_times else 0.0)
+                
+            x = np.arange(len(available_agents))
+            width = 0.35
             
-            train_times.append(np.mean(t_times) if t_times else 0.0)
-            inf_times.append(np.mean(i_times) if i_times else 0.0)
+            fig, ax1 = plt.subplots(figsize=(10, 6))
+            ax2 = ax1.twinx()
             
-        x = np.arange(len(available_agents))
-        width = 0.35
-        
-        fig, ax1 = plt.subplots(figsize=(10, 6))
-        ax2 = ax1.twinx()
-        
-        rects1 = ax1.bar(x - width/2, train_times, width, label="Training Time (s)", color="#9b59b6")
-        rects2 = ax2.bar(x + width/2, inf_times, width, label="Inference Time (ms)", color="#f1c40f")
-        
-        ax1.set_xlabel("Algorithms", fontsize=12)
-        ax1.set_ylabel("Avg Training Time (seconds)", color="#9b59b6", fontsize=12)
-        ax2.set_ylabel("Avg Inference Time (milliseconds)", color="#f1c40f", fontsize=12)
-        ax1.set_xticks(x)
-        ax1.set_xticklabels([SHORT_NAMES[a] for a in available_agents])
-        plt.title("Computational Efficiency Benchmark", fontsize=14, fontweight="bold")
-        fig.tight_layout()
-        plt.savefig(os.path.join(output_plots_dir, "efficiency_comparison.png"), dpi=150)
-        plt.close()
+            rects1 = ax1.bar(x - width/2, train_times, width, label="Training Time (s)", color="#9b59b6")
+            rects2 = ax2.bar(x + width/2, inf_times, width, label="Inference Time (ms)", color="#f1c40f")
+            
+            ax1.set_xlabel("Algorithms", fontsize=12)
+            ax1.set_ylabel("Avg Training Time (seconds)", color="#9b59b6", fontsize=12)
+            ax2.set_ylabel("Avg Inference Time (milliseconds)", color="#f1c40f", fontsize=12)
+            ax1.set_xticks(x)
+            ax1.set_xticklabels([SHORT_NAMES[a] for a in available_agents])
+            plt.title("Computational Efficiency Benchmark", fontsize=14, fontweight="bold")
+            fig.tight_layout()
+            pdf.savefig(fig)
+            plt.close(fig)
 
 def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
     """Create a premium markdown report summarizing all experiments."""

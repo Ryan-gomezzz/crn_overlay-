@@ -83,6 +83,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         "throughput_s": [],
         "throughput_p": [],
         "outage": [],
+        "su_outage": [],
         "ber": [],
         "average_power": [],
         "total_reward": [],
@@ -102,6 +103,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         ep_throughput_s = []
         ep_throughput_p = []
         ep_outage = []
+        ep_su_outage = []
         ep_ber = []
         ep_average_power = []
         ep_relay_success = []
@@ -116,6 +118,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
             ep_throughput_s.append(info.get("throughput_reward", 0))
             ep_throughput_p.append(info.get("primary_throughput", 0))
             ep_outage.append(info.get("outage", 0))
+            ep_su_outage.append(info.get("su_outage", 0))
             ep_ber.append(info.get("ber", 0))
             ep_average_power.append(info.get("average_power", 0))
 
@@ -131,6 +134,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
         eval_metrics["throughput_p"].append(np.mean(ep_throughput_p))
         eval_metrics["outage"].append(np.mean(ep_outage))
+        eval_metrics["su_outage"].append(np.mean(ep_su_outage))
         eval_metrics["ber"].append(np.mean(ep_ber))
         eval_metrics["average_power"].append(np.mean(ep_average_power))
         eval_metrics["relay_success"].append(np.mean(ep_relay_success))

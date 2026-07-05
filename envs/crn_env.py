@@ -164,6 +164,7 @@ class OverlayCRNEnv(gym.Env):
         info["primary_throughput"] = info.get("pu_throughput", 0.0)
         info["average_power"] = (info.get("p_su", 0.0) + info.get("p_relay", 0.0)) / 2.0
         info["outage"] = 1.0 if info.get("interference_at_pr", 0.0) > getattr(self._config, "interference_threshold", 0.1) else 0.0
+        info["su_outage"] = 1.0 if info["throughput_reward"] <= 0.0 else 0.0
 
         # Update histories
         self._act_history = np.roll(self._act_history, -1, axis=0)

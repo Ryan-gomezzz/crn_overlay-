@@ -203,6 +203,7 @@ def run_single_train(
         "rewards": [],
         "throughput_s": [],
         "outage": [],
+        "su_outage": [],
         "ber": []
     }
     
@@ -241,6 +242,7 @@ def run_single_train(
                 history["rewards"].append(eval_metrics["total_reward"])
                 history["throughput_s"].append(eval_metrics["throughput_s"])
                 history["outage"].append(eval_metrics["outage"])
+                history["su_outage"].append(eval_metrics.get("su_outage", 0.0))
                 history["ber"].append(eval_metrics["ber"])
                 
                 log_print(
@@ -319,6 +321,7 @@ def run_single_train(
         "eval_reward": final_metrics["total_reward"],
         "eval_su_throughput": final_metrics["throughput_s"],
         "eval_pu_outage": final_metrics["outage"],
+        "eval_su_outage": final_metrics.get("su_outage", 0.0),
         "history": history
     }
     
