@@ -17,7 +17,7 @@ network:
   p_max_su: 20.0    # SUs and SUR max power in dBm
 
 channel:
-  path_loss_exponent: 3.0
+  path_loss_exponent: 3.5
   noise_power_dbm: -114.0
   fading_type: rayleigh
 
@@ -39,7 +39,7 @@ camo_td3:
   history_length: 10
   decoding_threshold: 0.1         # Lowered to make it easier for relay to decode
   pu_rate_threshold: 0.5          # Lowered rate target for primary user so SU can interfere slightly
-  interference_limit_dbm: -50.0   
+  interference_limit_dbm: -80.0   
   energy_limit_watts: 0.1         
   penalty_coef_inf: 1.0           # Reduced from 10.0
   penalty_coef_nrg: 1.0           # Reduced from 10.0
