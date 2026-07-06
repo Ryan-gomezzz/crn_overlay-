@@ -62,7 +62,7 @@ class OverlayCRNEnv(gym.Env):
 
         # Track steps in current episode
         self.current_step = 0
-        self.max_steps = self.config.get("simulation", {}).get("time_steps_per_episode", 100)
+        self.max_steps = self.config.get("simulation", {}).get("time_steps_per_episode", 300)
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[dict] = None

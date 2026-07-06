@@ -34,7 +34,7 @@ def validate_yaml_config(config_path: str = "configs/config.yaml") -> tuple[bool
     required_keys = {
         "algorithm": ["name"],
         "simulation": ["seed", "time_steps_per_episode"],
-        "training": ["gamma", "tau", "policy_delay", "exploration_noise", "batch_size", "lr_actor", "lr_critic", "buffer_size", "total_steps", "start_steps"],
+        "training": ["max_episodes", "gamma", "tau", "policy_delay", "exploration_noise", "batch_size", "lr_actor", "lr_critic", "buffer_size", "total_steps", "start_steps"],
         "camo_td3": ["history_length", "pu_rate_threshold", "interference_limit_dbm", "energy_limit_watts"],
         "logging": ["log_dir"],
         "evaluation": ["eval_episodes", "eval_interval", "save_dir"]

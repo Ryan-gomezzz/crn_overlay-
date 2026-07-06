@@ -157,12 +157,16 @@ def main_legacy():
 
     # Training parameters
     train_cfg = config.get("training", {})
-    total_steps = train_cfg.get("total_steps", 10000)
+    max_episodes = train_cfg.get("max_episodes", 2000)
+    steps_per_episode = sim_cfg.get("time_steps_per_episode", 300)
+    total_steps = max_episodes * steps_per_episode
+    train_cfg["total_steps"] = total_steps
     start_steps = train_cfg.get("start_steps", 1000)
     eval_interval = eval_cfg.get("eval_interval", 500)
     eval_episodes = eval_cfg.get("eval_episodes", 5)
 
     print(f"Starting training pipeline for {algo_name}...")
+    print(f"Training limits: {max_episodes} episodes, {steps_per_episode} steps per episode")
     
     obs, info = env.reset()
     episode_reward = 0

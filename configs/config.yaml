@@ -5,7 +5,7 @@ algorithm:
 
 simulation:
   seed: 42
-  time_steps_per_episode: 100
+  time_steps_per_episode: 300
 
 network:
   pt_coords: [0.0, 0.0]
@@ -22,6 +22,7 @@ channel:
   fading_type: rayleigh
 
 training:
+  max_episodes: 2000
   gamma: 0.99
   tau: 0.005
   policy_delay: 2
@@ -32,7 +33,7 @@ training:
   lr_actor: 0.0003
   lr_critic: 0.0003
   buffer_size: 100000
-  total_steps: 10000
+  total_steps: 600000
   start_steps: 1000  # Number of steps with uniform random actions before training begins
 
 camo_td3:

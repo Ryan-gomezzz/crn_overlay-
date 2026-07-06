@@ -517,8 +517,8 @@ Using `--all-seeds` automatically executes experiments using all three seeds and
 
 Every key environment and training parameter can be temporarily overridden from the command line:
 ```bash
-# Train Overlay TD3 with 5000 episodes and 2000 environment steps
-python main.py train --agent overlay --episodes 5000 --steps 2000 --seed 42
+# Train Overlay TD3 with 2000 episodes and 300 environment steps
+python main.py train --agent overlay --episodes 2000 --steps 300 --seed 42
 
 # Train TD3 with custom batch size on GPU
 python main.py train --agent td3 --batch-size 512 --device cuda
@@ -529,11 +529,11 @@ To ensure consistent research metrics and prevent excessive memory allocation, t
 * **Training Episodes**:
   * Default: `2000` episodes
   * Minimum limit: `500` episodes
-  * Maximum limit: `5000` episodes
+  * Maximum limit: `2000` episodes
 * **Environment Steps per Episode**:
-  * Default: `500` steps
+  * Default: `300` steps
   * Minimum limit: `200` steps
-  * Maximum limit: `2000` steps
+  * Maximum limit: `300` steps
 
 ---
 

@@ -40,6 +40,7 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
         config["simulation"]["seed"] = args.seed
     if hasattr(args, "steps") and args.steps is not None:
         config["simulation"]["time_steps_per_episode"] = args.steps
+    config["training"]["max_episodes"] = getattr(args, "episodes", config["training"].get("max_episodes", 2000))
 
     # Training overrides
     if hasattr(args, "batch_size") and args.batch_size is not None:
@@ -55,7 +56,7 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
     # Evaluation overrides
     if hasattr(args, "episodes") and args.episodes is not None and args.command in ("train", "benchmark", "resume"):
         # For training, total_steps is episodes * steps
-        steps_per_ep = config["simulation"].get("time_steps_per_episode", 500)
+        steps_per_ep = config["simulation"].get("time_steps_per_episode", 300)
         config["training"]["total_steps"] = args.episodes * steps_per_ep
     
     return config
@@ -150,13 +151,13 @@ def run_single_train(
         
         # Recover steps & episodes from total_it
         global_step = agent.total_it
-        steps_per_ep = config["simulation"].get("time_steps_per_episode", 500)
+        steps_per_ep = config["simulation"].get("time_steps_per_episode", 300)
         start_episode = int(global_step // steps_per_ep) + 1
         log_print(f"Recovered state: global_step={global_step}, start_episode={start_episode}")
 
     # Training settings
-    episodes = getattr(args, "episodes", 2000)
-    steps_per_episode = config["simulation"].get("time_steps_per_episode", 500)
+    episodes = getattr(args, "episodes", config["training"].get("max_episodes", 2000))
+    steps_per_episode = config["simulation"].get("time_steps_per_episode", 300)
     start_steps = config["training"].get("start_steps", 1000)
     eval_interval = config["evaluation"].get("eval_interval", 500)
     eval_episodes = config["evaluation"].get("eval_episodes", 5)
@@ -699,6 +700,8 @@ def handle_config(args: Any):
     
     print("\n[Training Parameters]")
     tr = cfg.get("training", {})
+    print(f"  Max Episodes:            {tr.get('max_episodes', 2000)}")
+    print(f"  Max Steps / Episode:     {sim.get('time_steps_per_episode', 300)}")
     print(f"  Discount (Gamma):        {tr.get('gamma')}")
     print(f"  Soft Update (Tau):       {tr.get('tau')}")
     print(f"  Policy Update Delay:     {tr.get('policy_delay')}")
@@ -752,9 +755,9 @@ def handle_checkpoints(args: Any):
                     steps = checkpoint.get("total_it", 0)
                     
                     # Try to reconstruct episodes from config
-                    steps_per_ep = 500
+                    steps_per_ep = 300
                     if "config" in checkpoint and "simulation" in checkpoint["config"]:
-                        steps_per_ep = checkpoint["config"]["simulation"].get("time_steps_per_episode", 500)
+                        steps_per_ep = checkpoint["config"]["simulation"].get("time_steps_per_episode", 300)
                     ep = steps // steps_per_ep
                 except Exception:
                     algo = "Unknown"

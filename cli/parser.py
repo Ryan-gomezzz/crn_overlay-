@@ -39,8 +39,8 @@ def validate_episodes(val: str) -> int:
         ival = int(val)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Episodes must be an integer, got '{val}'")
-    if not (500 <= ival <= 5000):
-        raise argparse.ArgumentTypeError(f"Episodes must be between 500 and 5000 (inclusive), got {ival}")
+    if not (500 <= ival <= 2000):
+        raise argparse.ArgumentTypeError(f"Episodes must be between 500 and 2000 (inclusive), got {ival}")
     return ival
 
 def validate_steps(val: str) -> int:
@@ -49,8 +49,8 @@ def validate_steps(val: str) -> int:
         ival = int(val)
     except ValueError:
         raise argparse.ArgumentTypeError(f"Steps per episode must be an integer, got '{val}'")
-    if not (200 <= ival <= 2000):
-        raise argparse.ArgumentTypeError(f"Steps per episode must be between 200 and 2000 (inclusive), got {ival}")
+    if not (200 <= ival <= 300):
+        raise argparse.ArgumentTypeError(f"Steps per episode must be between 200 and 300 (inclusive), got {ival}")
     return ival
 
 def validate_seed(val: str) -> int:
@@ -76,8 +76,8 @@ def str_to_bool(val: str) -> bool:
 
 def add_common_overrides(parser: argparse.ArgumentParser):
     """Add training/execution parameters overrides to parser."""
-    parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Number of training episodes (500-5000)")
-    parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
+    parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Number of training episodes (500-2000)")
+    parser.add_argument("--steps", type=validate_steps, default=300, help="Steps per episode (200-300)")
     parser.add_argument("--seed", type=validate_seed, help=f"Random seed to use {VALID_SEEDS}")
     parser.add_argument("--all-seeds", action="store_true", help="Run execution over all valid seeds (42, 123, 2026)")
     parser.add_argument("--device", choices=["cpu", "cuda"], help="Computation device (cpu or cuda)")
@@ -126,8 +126,8 @@ def get_parser() -> argparse.ArgumentParser:
     bench_parser.add_argument("--all-seeds", action="store_true", help="Run benchmark across all predefined seeds")
     bench_parser.add_argument("--device", choices=["cpu", "cuda"], help="Computation device (cpu or cuda)")
     bench_parser.add_argument("--output-dir", type=str, default="experiments", help="Base output directory")
-    bench_parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Episodes per agent in benchmark (500-5000)")
-    bench_parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
+    bench_parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Episodes per agent in benchmark (500-2000)")
+    bench_parser.add_argument("--steps", type=validate_steps, default=300, help="Steps per episode (200-300)")
 
     # 4. Compare Subcommand
     compare_parser = subparsers.add_parser("compare", help="Compare training/evaluation results and generate summary stats")

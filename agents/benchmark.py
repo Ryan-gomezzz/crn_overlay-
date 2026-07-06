@@ -23,7 +23,7 @@ def load_config():
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
 
-def run_experiment(algo_name: str, total_steps: int = 600, eval_interval: int = 100):
+def run_experiment(algo_name: str, total_steps: int = 2000 * 300, eval_interval: int = 3000):
     print(f"\n================ STARTING EXPERIMENT FOR {algo_name} ================")
     config = load_config()
     config["algorithm"]["name"] = algo_name
@@ -221,7 +221,7 @@ def main():
     results = {}
     
     for name in ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]:
-        history, train_time, inf_time = run_experiment(name, total_steps=600, eval_interval=100)
+        history, train_time, inf_time = run_experiment(name, total_steps=2000 * 300, eval_interval=3000)
         results[name] = {
             "history": history,
             "train_time": train_time,
