@@ -10,7 +10,9 @@ from typing import List, Optional
 AGENT_MAP = {
     "td3": "TD3",
     "underlay": "UNDERLAY_TD3",
-    "overlay": "OVERLAY_TD3"
+    "overlay": "OVERLAY_TD3",
+    "matd3": "MATD3",
+    "cent_noma_td3": "CENT_NOMA_TD3"
 }
 
 REVERSE_AGENT_MAP = {v: k for k, v in AGENT_MAP.items()}

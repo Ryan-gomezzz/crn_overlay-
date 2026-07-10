@@ -169,7 +169,7 @@ def main_legacy():
 def main():
     # If standard CLI arguments are used that belong to Aditya's CLI, route to it.
     # Otherwise run legacy logic.
-    if len(sys.argv) > 1 and sys.argv[1] in ["train", "eval", "benchmark", "hyperopt"]:
+    if len(sys.argv) > 1 and sys.argv[1] in ["train", "eval", "benchmark", "hyperopt", "resume", "report", "plots", "compare", "test", "config", "checkpoints"]:
         # Run Aditya's CLI flow
         from cli.parser import get_parser
         from cli.runner import execute_cli

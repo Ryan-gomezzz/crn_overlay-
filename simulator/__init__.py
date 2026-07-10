@@ -18,6 +18,7 @@ from simulator.base_model import (
     SimulatorConfig,
 )
 from simulator.overlay_model import OverlaySimulator
+from simulator.noma_overlay_model import NOMAOverlaySimulator, NOMAConfig
 
 __all__ = [
     "SimulatorConfig",
@@ -30,4 +31,6 @@ __all__ = [
     "MetricsCalculatorProtocol",
     "BaseSimulator",
     "OverlaySimulator",
+    "NOMAOverlaySimulator",
+    "NOMAConfig",
 ]

@@ -13,7 +13,11 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 
 from envs.crn_env import OverlayCRNEnv
+from envs.multi_agent_crn_env import make_ma_crn_env
+from envs.flat_noma_env import make_flat_noma_env
 from agents.train_td3 import TD3Agent
+from agents.matd3 import MATD3Agent
+from agents.cent_noma_td3 import CentNOMATD3Agent
 from main import set_seed, evaluate_policy
 from cli.logger import ProgressLogger, print_header, print_footer
 from cli.parser import AGENT_MAP, REVERSE_AGENT_MAP, VALID_SEEDS
@@ -80,7 +84,10 @@ class HybridWriter:
 
     def add_scalar(self, name, value, step):
         if self.tb_writer:
-            self.tb_writer.add_scalar(name, value, step)
+            try:
+                self.tb_writer.add_scalar(name, value, step)
+            except Exception:
+                pass
         if self.wandb_enabled:
             import wandb
             wandb.log({name: value}, step=step)
@@ -110,15 +117,25 @@ def run_single_train(
     
     set_seed(seed)
     
-    # Instantiate environment
-    env = OverlayCRNEnv(config)
-    env.action_space.seed(seed)
-    
-    # Device
-    device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
-    
-    agent = TD3Agent(config, device=device)
+    # Instantiate environment & agent
+    if agent_name == "MATD3":
+        env = make_ma_crn_env(config_path)  # Simplified config loading
+        env.action_space.seed(seed)
+        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
+        agent = MATD3Agent(config, device=device)
+    elif agent_name == "CENT_NOMA_TD3":
+        env = make_flat_noma_env(config_path)
+        env.action_space.seed(seed)
+        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
+        agent = CentNOMATD3Agent(config, device=device)
+    else:
+        env = OverlayCRNEnv(config)
+        env.action_space.seed(seed)
+        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
+        agent = TD3Agent(config, device=device)
     
     # Setup Output Run Directory
     timestamp = get_timestamp()
@@ -197,6 +214,9 @@ def run_single_train(
     episode_reward = 0.0
     obs, info = env.reset()
     
+    import math
+    from scipy.special import erfc
+    
     # Store evaluation metrics history
     history = {
         "episodes": [],
@@ -204,12 +224,24 @@ def run_single_train(
         "throughput_s": [],
         "outage": [],
         "su_outage": [],
-        "ber": []
+        "ber": [],
+        "sinr_db_pts": [],
+        "ber_pts": [],
+        "pu_sinr_db_pts": [],
+        "pu_ber_pts": [],
+        "pu_throughput": []
     }
+    
+    scatter_budget = max(1, 12000 // max(episodes, 1))
     
     for ep in range(start_episode, episodes + 1):
         obs, info = env.reset()
         episode_reward = 0.0
+        ep_pu_throughput = []
+        
+        # Sample steps for scatter plots
+        import random
+        sample_steps = set(random.sample(range(1, steps_per_episode + 1), min(scatter_budget, steps_per_episode)))
         
         for step in range(1, steps_per_episode + 1):
             global_step += 1
@@ -223,6 +255,23 @@ def run_single_train(
             next_obs, reward, done, truncated, next_info = env.step(action)
             episode_reward += reward
             
+            # Log scatter metrics for PDF generation
+            sinr_su = next_info.get("sinr_su", 0.0)
+            sinr_pu = next_info.get("sinr_pu", 0.0)
+            pu_tput = next_info.get("pu_throughput", 0.0)
+            ep_pu_throughput.append(pu_tput)
+            
+            if step in sample_steps:
+                sinr_s_db = 10.0 * math.log10(max(1e-9, sinr_su))
+                ber_s = float(0.5 * erfc(math.sqrt(max(0.0, sinr_su))))
+                sinr_p_db = 10.0 * math.log10(max(1e-9, sinr_pu))
+                ber_p = float(0.5 * erfc(math.sqrt(max(0.0, sinr_pu))))
+                
+                history["sinr_db_pts"].append(sinr_s_db)
+                history["ber_pts"].append(ber_s)
+                history["pu_sinr_db_pts"].append(sinr_p_db)
+                history["pu_ber_pts"].append(ber_p)
+            
             # Store transition
             agent.replay_buffer.add(obs, action, reward, next_obs, done or truncated, info)
             
@@ -235,7 +284,12 @@ def run_single_train(
                 
             # Periodic evaluation
             if global_step % eval_interval == 0:
-                eval_env = OverlayCRNEnv(config)
+                if agent_name == "MATD3":
+                    eval_env = make_ma_crn_env(config_path)
+                elif agent_name == "CENT_NOMA_TD3":
+                    eval_env = make_flat_noma_env(config_path)
+                else:
+                    eval_env = OverlayCRNEnv(config)
                 eval_metrics = evaluate_policy(agent, eval_env, episodes=eval_episodes)
                 
                 history["episodes"].append(ep)
@@ -244,6 +298,7 @@ def run_single_train(
                 history["outage"].append(eval_metrics["outage"])
                 history["su_outage"].append(eval_metrics.get("su_outage", 0.0))
                 history["ber"].append(eval_metrics["ber"])
+                history["pu_throughput"].append(sum(ep_pu_throughput) / len(ep_pu_throughput) if ep_pu_throughput else 0.0)
                 
                 log_print(
                     f"\n[EVAL @ Step {global_step}] "
@@ -309,7 +364,14 @@ def run_single_train(
     # Load best model for final evaluation
     if os.path.exists(best_path):
         agent.load(best_path)
-    eval_env = OverlayCRNEnv(config)
+        
+    if agent_name == "MATD3":
+        eval_env = make_ma_crn_env(config_path)
+    elif agent_name == "CENT_NOMA_TD3":
+        eval_env = make_flat_noma_env(config_path)
+    else:
+        eval_env = OverlayCRNEnv(config)
+        
     final_metrics = evaluate_policy(agent, eval_env, episodes=20)
     
     # Save metrics JSON
@@ -489,11 +551,22 @@ def handle_evaluate(args: Any):
     
     set_seed(args.seed)
     
-    env = OverlayCRNEnv(config)
-    env.action_space.seed(args.seed)
-    
-    device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
-    agent = TD3Agent(config, device=device)
+    if args.agent == "MATD3":
+        env = make_ma_crn_env(config_path)
+        env.action_space.seed(args.seed)
+        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        agent = MATD3Agent(config, device=device)
+    elif args.agent == "CENT_NOMA_TD3":
+        env = make_flat_noma_env(config_path)
+        env.action_space.seed(args.seed)
+        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        agent = CentNOMATD3Agent(config, device=device)
+    else:
+        env = OverlayCRNEnv(config)
+        env.action_space.seed(args.seed)
+        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+        agent = TD3Agent(config, device=device)
+        
     agent.load(checkpoint_path)
     
     print(f"Evaluating policy over {args.episodes} episodes...")

@@ -60,3 +60,14 @@ evaluation:
   eval_episodes: 5
   eval_interval: 500
   save_dir: experiments/checkpoints/
+
+# Multi-User NOMA Overlay CRN Parameters
+multi_user:
+  num_su: 3                        # Number of secondary users (N)
+  su_coords:                       # Coordinates for each SU source
+    - [10.0, 20.0]                 # SU_1
+    - [10.0, -20.0]                # SU_2
+    - [20.0, 0.0]                  # SU_3
+  sud_coords: [90.0, 20.0]         # SU_N (destination)
+  sur_coords: [50.0, 10.0]        # Single shared relay
+  interference_threshold_dbm: -80.0  # I_th in dBm

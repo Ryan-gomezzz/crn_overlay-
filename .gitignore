@@ -20,9 +20,9 @@ logs/
 *.log
 
 # Experiment outputs
-experiments/runs/
-experiments/logs/
-experiments/checkpoints/
+experiments/
+results/
+*.zip
 
 # IDEs
 .idea/
