@@ -65,9 +65,9 @@ evaluation:
 multi_user:
   num_su: 3                        # Number of secondary users (N)
   su_coords:                       # Coordinates for each SU source
-    - [10.0, 20.0]                 # SU_1
-    - [10.0, -20.0]                # SU_2
-    - [20.0, 0.0]                  # SU_3
-  sud_coords: [90.0, 20.0]         # SU_N (destination)
-  sur_coords: [50.0, 10.0]        # Single shared relay
+    - [50.0, 200.0]                # SU_1
+    - [52.0, 200.0]                # SU_2
+    - [48.0, 200.0]                # SU_3
+  sud_coords: [50.0, 180.0]        # SU_N (destination)
+  sur_coords: [50.0, 190.0]        # Single shared relay
   interference_threshold_dbm: -80.0  # I_th in dBm
