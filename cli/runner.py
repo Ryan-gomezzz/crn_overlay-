@@ -682,7 +682,8 @@ def handle_report(args: Any):
     pdf_path = os.path.join(reports_dir, "research_report.pdf")
     pdf_ok = generate_pdf_report(md_path, pdf_path)
     if pdf_ok:
-        print(f"Generated PDF report: {pdf_path}")
+        final_path = pdf_ok if isinstance(pdf_ok, str) else pdf_path
+        print(f"Generated PDF report: {final_path}")
     else:
         print("Note: PDF compilation was skipped (optional package reportlab not installed).")
     print_footer()
