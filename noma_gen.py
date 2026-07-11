@@ -141,7 +141,7 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str):
         if th is None:
             continue
         plotted = True
-        se = th / BANDWIDTH_HZ
+        se = th
         ax2.plot(ep, se, color=COLORS[agent], alpha=0.30, linewidth=0.8)
         ax2.plot(ep, smooth_curve(se, factor=0.9), color=COLORS[agent],
                  linewidth=2, label=f'{SHORT_NAMES[agent]} (EMA)')
@@ -280,7 +280,7 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
             
             # Map metrics.json to legacy format
             m.rewards = hist.get("rewards", [])
-            m.su_throughputs = [x / BANDWIDTH_HZ for x in hist.get("throughput_s", [])]
+            m.su_throughputs = hist.get("throughput_s", [])
             m.pu_throughputs = hist.get("pu_throughput", [])
             m.outage_probs = hist.get("outage", [])
             m.avg_bers = hist.get("ber", [])
@@ -292,7 +292,7 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
             
             # Fill summary table stats
             m.final_avg_reward = run.get("eval_reward", 0.0)
-            m.final_avg_su_tput = run.get("eval_su_throughput", 0.0) / BANDWIDTH_HZ if run.get("eval_su_throughput") else 0.0
+            m.final_avg_su_tput = run.get("eval_su_throughput", 0.0) if run.get("eval_su_throughput") else 0.0
             
             if len(m.pu_throughputs) > 0:
                 m.final_avg_pu_tput = sum(m.pu_throughputs[-100:]) / min(100, len(m.pu_throughputs))
@@ -305,7 +305,7 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
             
             eps_list = hist.get("episodes", [])
             if eps_list and len(eps_list) > n_eps:
-                n_eps = len(eps_list)
+                n_eps = int(max(eps_list))
                 
             all_metrics.append(m)
             
