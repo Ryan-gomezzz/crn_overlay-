@@ -41,13 +41,13 @@ camo_td3:
   pu_rate_threshold: 0.5          # Lowered rate target for primary user so SU can interfere slightly
   interference_limit_dbm: -80.0   
   energy_limit_watts: 0.1         
-  penalty_coef_inf: 1.0           # Reduced from 10.0
-  penalty_coef_nrg: 1.0           # Reduced from 10.0
+  penalty_coef_inf: 50.0          # Greatly increased to enforce strict PU protection
+  penalty_coef_nrg: 1.0           
   lr_lambda: 0.001                
-  lambda_inf_init: 0.001          # Reduced from 0.1
-  lambda_qos_init: 0.001          # Reduced from 0.1 (makes agent less terrified of dropping PU rate initially)
-  lambda_nrg_init: 0.001          # Reduced from 0.1
-  lambda_clamp_max: 50.0
+  lambda_inf_init: 50.0           # Greatly increased 
+  lambda_qos_init: 50.0           # Greatly increased to force 0% PU Outage
+  lambda_nrg_init: 0.001          
+  lambda_clamp_max: 200.0         # Increased to allow huge penalties
   eta_explore_init: 0.05
   eta_explore_decay: 0.9999
 

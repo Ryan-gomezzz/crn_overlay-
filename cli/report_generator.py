@@ -212,6 +212,10 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
              "Metrics below are read directly from each run's `metrics.json`.", ""]
     lines.append("| Algorithm | Episodes | Seeds | Mean Return | SU Rate (bits/s/Hz) | PU Outage | SU Outage | Train Time (s) |")
     lines.append("|---|---|---|---|---|---|---|---|")
+    if "MATD3" in agents:
+        lines.append("")
+        lines.append("> **Note:** NOMA agents were trained with highly aggressive Lagrangian multipliers (`lambda_qos_init=50.0`, `penalty_coef_inf=50.0`) to strictly enforce Primary User outage constraints.")
+        lines.append("")
     for agent in agents:
         s = _run_summary(load_metrics_for_agent(experiments_dir, agent))
         if not s:
