@@ -279,6 +279,7 @@ def generate_pdf_report(md_path: str, pdf_path: str, agents=None) -> str:
             m = RunMetrics(name=agent)
             
             # Map metrics.json to legacy format
+            m.episodes = hist.get("episodes", [])
             m.rewards = hist.get("rewards", [])
             m.su_throughputs = [x / BANDWIDTH_HZ for x in hist.get("throughput_s", [])]
             m.pu_throughputs = hist.get("pu_throughput", [])

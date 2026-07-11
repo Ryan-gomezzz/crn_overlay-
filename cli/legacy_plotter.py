@@ -22,6 +22,7 @@ ALPHA_FILL = 0.15
 @dataclass
 class RunMetrics:
     name: str
+    episodes: List[int] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
     su_throughputs: List[float] = field(default_factory=list)
     pu_throughputs: List[float] = field(default_factory=list)
@@ -177,7 +178,7 @@ def generate_legacy_pdf(all_metrics: List[RunMetrics], output_path: str, n_episo
         for m_obj in all_metrics:
             color = _color_for(m_obj)
             raw = np.array(m_obj.su_throughputs); sm = smooth(raw, window=20)
-            eps_arr = np.arange(1, len(raw) + 1)
+            eps_arr = np.array(m_obj.episodes) if len(m_obj.episodes) == len(raw) else np.arange(1, len(raw) + 1)
             ax.plot(eps_arr, raw, color=color, alpha=0.25, linewidth=0.8)
             ax.plot(eps_arr, sm,  color=color, linewidth=2.0, label=f"{m_obj.name} (smoothed)")
             ax.fill_between(eps_arr, np.maximum(0, sm - raw.std()), sm + raw.std(), color=color, alpha=ALPHA_FILL)
@@ -191,7 +192,7 @@ def generate_legacy_pdf(all_metrics: List[RunMetrics], output_path: str, n_episo
             color = _color_for(m_obj)
             raw = np.array(m_obj.pu_throughputs); sm = smooth(raw, window=20)
             if len(raw) > 0:
-                eps_arr = np.arange(1, len(raw) + 1)
+                eps_arr = np.array(m_obj.episodes) if len(m_obj.episodes) == len(raw) else np.arange(1, len(raw) + 1)
                 ax.plot(eps_arr, raw, color=color, alpha=0.25, linewidth=0.8)
                 ax.plot(eps_arr, sm,  color=color, linewidth=2.0, label=f"{m_obj.name} (smoothed)")
                 ax.fill_between(eps_arr, np.maximum(0, sm - raw.std()), sm + raw.std(), color=color, alpha=ALPHA_FILL)
@@ -204,7 +205,7 @@ def generate_legacy_pdf(all_metrics: List[RunMetrics], output_path: str, n_episo
         for m_obj in all_metrics:
             color = _color_for(m_obj)
             raw = np.array(m_obj.outage_probs); sm = smooth(raw, window=20)
-            eps_arr = np.arange(1, len(raw) + 1)
+            eps_arr = np.array(m_obj.episodes) if len(m_obj.episodes) == len(raw) else np.arange(1, len(raw) + 1)
             ax.plot(eps_arr, raw, color=color, alpha=0.25, linewidth=0.8)
             ax.plot(eps_arr, sm,  color=color, linewidth=2.0, label=f"{m_obj.name} (smoothed)")
         ax.axhline(y=0.05, color="gray", linestyle="--", linewidth=1.2, label="5% target")
@@ -222,7 +223,7 @@ def generate_legacy_pdf(all_metrics: List[RunMetrics], output_path: str, n_episo
             ax = axes[idx // cols][idx % cols]
             color = _color_for(m_obj)
             raw = np.array(m_obj.rewards); sm = smooth(raw, window=20)
-            eps_arr = np.arange(1, len(raw) + 1)
+            eps_arr = np.array(m_obj.episodes) if len(m_obj.episodes) == len(raw) else np.arange(1, len(raw) + 1)
             ax.plot(eps_arr, raw, color=color, alpha=0.2, linewidth=0.7)
             ax.plot(eps_arr, sm,  color=color, linewidth=2.2, label="Smoothed reward")
             ax.set_xlabel("Episode"); ax.set_ylabel("Episode Reward")
@@ -236,7 +237,7 @@ def generate_legacy_pdf(all_metrics: List[RunMetrics], output_path: str, n_episo
         for m_obj in all_metrics:
             color = _color_for(m_obj)
             raw = np.array(m_obj.rewards); sm = smooth(raw, window=20)
-            eps_arr = np.arange(1, len(raw) + 1)
+            eps_arr = np.array(m_obj.episodes) if len(m_obj.episodes) == len(raw) else np.arange(1, len(raw) + 1)
             ax.plot(eps_arr, raw, color=color, alpha=0.18, linewidth=0.7)
             ax.plot(eps_arr, sm,  color=color, linewidth=2.2, label=f"{m_obj.name}")
         ax.set_xlabel("Episode"); ax.set_ylabel("Episode Reward")
