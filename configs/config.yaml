@@ -41,7 +41,8 @@ camo_td3:
   pu_rate_threshold: 0.5          # Lowered rate target for primary user so SU can interfere slightly
   interference_limit_dbm: -80.0   
   energy_limit_watts: 0.1         
-  penalty_coef_inf: 50.0          # Greatly increased to enforce strict PU protection
+  penalty_coef_inf: 1.0e10          # Penalty coefficient for interference constraint
+  penalty_coef_qos: 10.0          # Penalty coefficient for PU QoS constraint
   penalty_coef_nrg: 1.0           
   lr_lambda: 0.001                
   lambda_inf_init: 50.0           # Greatly increased 
