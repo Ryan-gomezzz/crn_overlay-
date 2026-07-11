@@ -8,17 +8,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict, List, Any, Optional
 
-# Premium color palette for the 3 agents
+# Premium color palette for all agents
 COLORS = {
     "TD3": "#1f77b4",          # Deep Blue
     "UNDERLAY_TD3": "#d62728", # Crimson Red
-    "OVERLAY_TD3": "#2ca02c"   # Forest Green
+    "OVERLAY_TD3": "#2ca02c",  # Forest Green
+    "MATD3": "#9467bd",        # Purple
+    "CENT_NOMA_TD3": "#ff7f0e" # Orange
 }
 
 SHORT_NAMES = {
     "TD3": "TD3",
     "UNDERLAY_TD3": "Underlay TD3",
-    "OVERLAY_TD3": "Overlay TD3"
+    "OVERLAY_TD3": "Overlay TD3",
+    "MATD3": "MATD3",
+    "CENT_NOMA_TD3": "Cent NOMA TD3"
 }
 
 def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, Any]]:
@@ -93,16 +97,14 @@ def _agent_series(runs, key):
     return np.asarray(episodes), np.asarray(values)
 
 
-def generate_comparison_plots(experiments_dir: str, output_plots_dir: str):
-    """Plot the *actual* measured training metrics (no synthetic/theoretical curves).
-
-    Produces learning curves straight from each agent's ``metrics.json`` history:
-    episode return, secondary spectral efficiency, and PU/SU outage. Metrics that
-    the simulator never records (e.g. BER) are intentionally not plotted.
+def generate_comparison_plots(experiments_dir: str, output_plots_dir: str, agents=None):
+    """Generate and save overlaid plots comparing the specified agents.
+    If none provided, defaults to the legacy 3 agents.
     """
     os.makedirs(output_plots_dir, exist_ok=True)
 
-    agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+    if agents is None:
+        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     metrics_by_agent = {a: load_metrics_for_agent(experiments_dir, a) for a in agents}
     active = [a for a in agents if metrics_by_agent[a]]
 
@@ -200,11 +202,12 @@ def _run_summary(runs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     }
 
 
-def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
+def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None, prefix="") -> str:
     """Create a markdown report summarizing the real measured metrics per agent."""
     os.makedirs(output_dir, exist_ok=True)
-    report_path = os.path.join(output_dir, "research_report.md")
-    agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+    report_path = os.path.join(output_dir, f"{prefix}research_report.md")
+    if agents is None:
+        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     lines = ["# CRN Overlay Framework — Experimental Report", "",
              "Metrics below are read directly from each run's `metrics.json`.", ""]
     lines.append("| Algorithm | Episodes | Seeds | Mean Return | SU Rate (bits/s/Hz) | PU Outage | SU Outage | Train Time (s) |")
@@ -225,7 +228,7 @@ def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
         f.write("\n".join(lines) + "\n")
     return report_path
 
-def generate_pdf_report(md_path: str, pdf_path: str) -> str:
+def generate_pdf_report(md_path: str, pdf_path: str, agents=None) -> str:
     """Compile the professional PDF report matching the legacy Matplotlib layout."""
     import os
     try:
@@ -236,7 +239,8 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> str:
         
     try:
         experiments_dir = os.path.abspath(os.path.join(os.path.dirname(md_path), ".."))
-        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+        if agents is None:
+            agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
         
         all_metrics = []
         n_eps = 0
@@ -324,7 +328,10 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> str:
         except NameError:
             ith_val = "unknown"
             
-        new_name = f"report_ep{n_eps}_nak{nakagami_m}_Ith{ith_val}_{timestamp}.pdf"
+        is_noma = "MATD3" in agents
+        prefix = "noma_report" if is_noma else "report"
+            
+        new_name = f"{prefix}_ep{n_eps}_nak{nakagami_m}_Ith{ith_val}_{timestamp}.pdf"
         new_pdf_path = os.path.join(os.path.dirname(pdf_path), new_name)
         if os.path.exists(pdf_path):
             os.rename(pdf_path, new_pdf_path)

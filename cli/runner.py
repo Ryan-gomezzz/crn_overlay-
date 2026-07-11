@@ -675,17 +675,28 @@ def handle_report(args: Any):
     plots_dir = os.path.join(output_dir, "plots")
     reports_dir = os.path.join(output_dir, "reports")
     
+    # 1. Legacy Report
     generate_comparison_plots(output_dir, plots_dir)
     md_path = generate_markdown_report(output_dir, reports_dir)
-    print(f"Generated Markdown report: {md_path}")
-    
     pdf_path = os.path.join(reports_dir, "research_report.pdf")
     pdf_ok = generate_pdf_report(md_path, pdf_path)
     if pdf_ok:
         final_path = pdf_ok if isinstance(pdf_ok, str) else pdf_path
-        print(f"Generated PDF report: {final_path}")
+        print(f"Generated Legacy PDF report: {final_path}")
     else:
-        print("Note: PDF compilation was skipped (optional package reportlab not installed).")
+        print("Note: Legacy PDF compilation was skipped.")
+        
+    # 2. NOMA Report
+    noma_agents = ["MATD3", "CENT_NOMA_TD3"]
+    generate_comparison_plots(output_dir, plots_dir, agents=noma_agents)
+    md_path_noma = generate_markdown_report(output_dir, reports_dir, agents=noma_agents, prefix="noma_")
+    pdf_path_noma = os.path.join(reports_dir, "noma_research_report.pdf")
+    pdf_ok_noma = generate_pdf_report(md_path_noma, pdf_path_noma, agents=noma_agents)
+    if pdf_ok_noma:
+        final_path_noma = pdf_ok_noma if isinstance(pdf_ok_noma, str) else pdf_path_noma
+        print(f"Generated NOMA PDF report: {final_path_noma}")
+    else:
+        print("Note: NOMA PDF compilation was skipped.")
     print_footer()
 
 def handle_resume(args: Any):
