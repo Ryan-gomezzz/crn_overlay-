@@ -53,7 +53,7 @@ class MultiAgentCRNEnv(gym.Env):
         if "camo_td3" in self._raw_config:
             camo_cfg = self._raw_config["camo_td3"]
             if "penalty_coef_inf" in camo_cfg:
-                cfg.penalty_weight = camo_cfg["penalty_coef_inf"]
+                cfg.penalty_weight = float(camo_cfg["penalty_coef_inf"])
             
         self.simulator = NOMAOverlaySimulator(cfg)
         self.num_agents = self.simulator.num_agents
