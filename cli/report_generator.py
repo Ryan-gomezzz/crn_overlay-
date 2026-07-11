@@ -225,14 +225,14 @@ def generate_markdown_report(experiments_dir: str, output_dir: str) -> str:
         f.write("\n".join(lines) + "\n")
     return report_path
 
-def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
+def generate_pdf_report(md_path: str, pdf_path: str) -> str:
     """Compile the professional PDF report matching the legacy Matplotlib layout."""
     import os
     try:
         from cli.legacy_plotter import generate_legacy_pdf, RunMetrics
     except ImportError as e:
         print(f"Warning: Legacy plotter not found: {e}")
-        return False
+        return ""
         
     try:
         experiments_dir = os.path.abspath(os.path.join(os.path.dirname(md_path), ".."))
@@ -314,7 +314,22 @@ def generate_pdf_report(md_path: str, pdf_path: str) -> bool:
             pu_sinr_threshold_linear=pu_sinr_threshold_linear,
             outage_desc=outage_desc
         )
-        return True
+        
+        # Rename the file dynamically based on specifications
+        import time
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        # Provide fallback if int_thresh isn't parsed
+        try:
+            ith_val = int_thresh
+        except NameError:
+            ith_val = "unknown"
+            
+        new_name = f"report_ep{n_eps}_nak{nakagami_m}_Ith{ith_val}_{timestamp}.pdf"
+        new_pdf_path = os.path.join(os.path.dirname(pdf_path), new_name)
+        if os.path.exists(pdf_path):
+            os.rename(pdf_path, new_pdf_path)
+            return new_pdf_path
+        return pdf_path
     except Exception as e:
         print(f"Warning: PDF generation failed: {e}")
-        return False
+        return ""
