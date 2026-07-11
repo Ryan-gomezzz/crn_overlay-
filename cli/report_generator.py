@@ -37,7 +37,7 @@ def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, A
         agent_dir = os.path.join(experiments_dir, folder_map.get(agent, agent.lower()))
 
     if os.path.exists(agent_dir):
-        for run_name in os.listdir(agent_dir):
+        for run_name in sorted(os.listdir(agent_dir)):
             run_path = os.path.join(agent_dir, run_name)
             metrics_file = os.path.join(run_path, "metrics.json")
             if os.path.isdir(run_path) and os.path.exists(metrics_file):
