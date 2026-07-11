@@ -452,7 +452,12 @@ class NOMAOverlaySimulator:
             obs[i, 2] = g[f"sd_{i}"]
             obs[i, 3:] = common
 
-        return obs
+        # Convert raw gains (~1e-10 to 1e-4) into decibels
+        # Then min-max normalize to roughly [-1.0, 1.0] range
+        obs_db = 10.0 * np.log10(np.clip(obs, 1e-15, None))
+        obs_normalized = (obs_db + 70.0) / 50.0
+
+        return obs_normalized.astype(np.float32)
 
     # ------------------------------------------------------------------
     # Convenience helpers

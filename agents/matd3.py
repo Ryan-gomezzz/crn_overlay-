@@ -239,14 +239,15 @@ class MATD3Agent:
         
         # =======================================================
         # Lagrangian Update (Gradient Ascent)
+        # Use unclamped value for lambda update so gradients never die!
         # =======================================================
-        lambda_qos_val = self.lambda_qos
-        lambda_nrg_val = self.lambda_nrg
+        val_qos = F.softplus(self.alpha_qos)
+        val_nrg = F.softplus(self.alpha_nrg)
         
         violation_qos = self.pu_rate_threshold - Q1_qos.detach()
         violation_nrg = Q1_nrg.detach() - self.energy_limit_watts
         
-        loss_lambda = -(lambda_qos_val * violation_qos.mean()) - (lambda_nrg_val * violation_nrg.mean())
+        loss_lambda = -(val_qos * violation_qos.mean()) - (val_nrg * violation_nrg.mean())
         self.lambda_optimizer.zero_grad()
         loss_lambda.backward()
         self.lambda_optimizer.step()

@@ -50,6 +50,11 @@ class MultiAgentCRNEnv(gym.Env):
             if "sur_coords" in mu_cfg: cfg.sur_coords = mu_cfg["sur_coords"]
             if "interference_threshold_dbm" in mu_cfg: cfg.interference_threshold_dbm = mu_cfg["interference_threshold_dbm"]
             
+        if "camo_td3" in self._raw_config:
+            camo_cfg = self._raw_config["camo_td3"]
+            if "penalty_coef_inf" in camo_cfg:
+                cfg.penalty_weight = camo_cfg["penalty_coef_inf"]
+            
         self.simulator = NOMAOverlaySimulator(cfg)
         self.num_agents = self.simulator.num_agents
         
@@ -57,7 +62,7 @@ class MultiAgentCRNEnv(gym.Env):
             low=0.0, high=1.0, shape=(self.num_agents + 1,), dtype=np.float32
         )
         self.observation_space = spaces.Box(
-            low=0.0, high=np.inf, shape=(self.num_agents, 8), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(self.num_agents, 8), dtype=np.float32
         )
         
         # History Tracking
