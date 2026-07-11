@@ -38,9 +38,9 @@ class CentNOMATD3Agent:
         self.lr_lambda = camo_cfg.get("lr_lambda", 1e-3)
         self.history_length = camo_cfg.get("history_length", 10)
         
-        # Constraints
-        self.pu_rate_threshold = camo_cfg.get("pu_rate_threshold", 0.5)
-        self.energy_limit_watts = camo_cfg.get("energy_limit_watts", 0.1)
+        # Constraints (Discounted to match Q-values)
+        self.pu_rate_threshold = camo_cfg.get("pu_rate_threshold", 0.5) / (1.0 - self.gamma)
+        self.energy_limit_watts = camo_cfg.get("energy_limit_watts", 0.1) / (1.0 - self.gamma)
         
         mu_cfg = config.get("multi_user", {})
         self.num_agents = mu_cfg.get("num_su", 3)
