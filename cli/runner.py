@@ -18,7 +18,6 @@ from envs.flat_noma_env import make_flat_noma_env
 from agents.train_td3 import TD3Agent
 from agents.matd3 import MATD3Agent
 from agents.cent_noma_td3 import CentNOMATD3Agent
-from main import set_seed, evaluate_policy
 from cli.logger import ProgressLogger, print_header, print_footer
 from cli.parser import AGENT_MAP, REVERSE_AGENT_MAP, VALID_SEEDS
 from cli.report_generator import generate_comparison_plots, generate_markdown_report, generate_pdf_report
@@ -65,6 +64,81 @@ def apply_overrides(config: Dict[str, Any], args: Any, agent_name: str) -> Dict[
         config["training"]["total_steps"] = args.episodes * steps_per_ep
     
     return config
+
+def set_seed(seed: int):
+    import random
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+def evaluate_policy(agent, env, episodes: int = 5) -> dict:
+    eval_metrics = {
+        "throughput_s": [],
+        "throughput_p": [],
+        "outage": [],
+        "su_outage": [],
+        "ber": [],
+        "average_power": [],
+        "total_reward": [],
+        "relay_success": [],
+        "qos_satisfaction": [],
+        "constraint_satisfaction": [],
+    }
+
+    energy_limit = env.energy_limit if hasattr(env, 'energy_limit') else 1.0
+
+    for _ in range(episodes):
+        obs, info = env.reset()
+        done = False
+        truncated = False
+        episode_reward = 0.0
+        
+        ep_throughput_s = []
+        ep_throughput_p = []
+        ep_outage = []
+        ep_su_outage = []
+        ep_ber = []
+        ep_average_power = []
+        ep_relay_success = []
+        ep_qos_satisfaction = []
+        ep_constraint_satisfaction = []
+
+        while not (done or truncated):
+            action = agent.select_action(obs, info, explore=False)
+            obs, reward, done, truncated, info = env.step(action)
+            episode_reward += reward
+
+            ep_throughput_s.append(info.get("throughput_reward", 0))
+            ep_throughput_p.append(info.get("primary_throughput", 0))
+            ep_outage.append(info.get("outage", 0))
+            ep_su_outage.append(info.get("su_outage", 0))
+            ep_ber.append(info.get("ber", 0))
+            ep_average_power.append(info.get("average_power", 0))
+
+            dec = info.get("relay_decoded", 0.0)
+            ep_relay_success.append(dec)
+
+            qos_sat = 1.0 if info.get("outage", 0) == 0.0 else 0.0
+            ep_qos_satisfaction.append(qos_sat)
+
+            con_sat = 1.0 if (info.get("outage", 0) == 0.0 and info.get("average_power", 0) <= energy_limit) else 0.0
+            ep_constraint_satisfaction.append(con_sat)
+
+        eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
+        eval_metrics["throughput_p"].append(np.mean(ep_throughput_p))
+        eval_metrics["outage"].append(np.mean(ep_outage))
+        eval_metrics["su_outage"].append(np.mean(ep_su_outage))
+        eval_metrics["ber"].append(np.mean(ep_ber))
+        eval_metrics["average_power"].append(np.mean(ep_average_power))
+        eval_metrics["relay_success"].append(np.mean(ep_relay_success))
+        eval_metrics["qos_satisfaction"].append(np.mean(ep_qos_satisfaction))
+        eval_metrics["constraint_satisfaction"].append(np.mean(ep_constraint_satisfaction))
+        eval_metrics["total_reward"].append(episode_reward)
+
+    avg_metrics = {k: float(np.mean(v)) for k, v in eval_metrics.items()}
+    return avg_metrics
 
 class HybridWriter:
     """Wrapper that logs to TensorBoard and Weights & Biases simultaneously."""
@@ -678,25 +752,18 @@ def handle_report(args: Any):
     # 1. Legacy Report
     generate_comparison_plots(output_dir, plots_dir)
     md_path = generate_markdown_report(output_dir, reports_dir)
-    pdf_path = os.path.join(reports_dir, "research_report.pdf")
-    pdf_ok = generate_pdf_report(md_path, pdf_path)
-    if pdf_ok:
-        final_path = pdf_ok if isinstance(pdf_ok, str) else pdf_path
-        print(f"Generated Legacy PDF report: {final_path}")
-    else:
-        print("Note: Legacy PDF compilation was skipped.")
+    pdf_path = generate_pdf_report(output_dir, reports_dir)
+    print(f"Generated Legacy Markdown report: {md_path}")
+    print(f"Generated Legacy PDF report: {pdf_path}")
         
     # 2. NOMA Report
     noma_agents = ["MATD3", "CENT_NOMA_TD3"]
     generate_comparison_plots(output_dir, plots_dir, agents=noma_agents)
     md_path_noma = generate_markdown_report(output_dir, reports_dir, agents=noma_agents, prefix="noma_")
-    pdf_path_noma = os.path.join(reports_dir, "noma_research_report.pdf")
-    pdf_ok_noma = generate_pdf_report(md_path_noma, pdf_path_noma, agents=noma_agents)
-    if pdf_ok_noma:
-        final_path_noma = pdf_ok_noma if isinstance(pdf_ok_noma, str) else pdf_path_noma
-        print(f"Generated NOMA PDF report: {final_path_noma}")
-    else:
-        print("Note: NOMA PDF compilation was skipped.")
+    pdf_path_noma = generate_pdf_report(output_dir, reports_dir, agents=noma_agents, prefix="noma_")
+    print(f"Generated NOMA Markdown report: {md_path_noma}")
+    print(f"Generated NOMA PDF report: {pdf_path_noma}")
+    
     print_footer()
 
 def handle_resume(args: Any):

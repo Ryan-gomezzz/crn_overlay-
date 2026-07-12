@@ -9,8 +9,6 @@ import numpy as np
 import torch
 from envs.crn_env import OverlayCRNEnv
 from agents.train_td3 import TD3Agent
-from main import set_seed
-
 class DummyWriter:
     """Mock TensorBoard SummaryWriter to prevent crash when TB is disabled."""
     def add_scalar(self, name, value, step):
@@ -55,6 +53,16 @@ def validate_yaml_config(config_path: str = "configs/config.yaml") -> tuple[bool
             errors.append(f"Invalid algorithm name: '{config['algorithm']['name']}'. Choose from: {valid_algos}")
 
     return len(errors) == 0, errors
+
+def set_seed(seed: int):
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 def run_agent_smoke_test(algo_name: str) -> bool:
     """Run a fast 5-step training smoke test for the given algorithm."""

@@ -116,6 +116,17 @@ A novel custom architecture specifically redesigned for Overlay CRNs:
 *   **Cooperative Safety Exploration**: Exploration gradient biases power allocations to maximize PU rate while minimizing SU energy:
     $$v_t = \lambda_{QoS} \cdot \nabla_a Q^{QoS}_1(b_t, a) - \lambda_{nrg} \cdot \nabla_a Q^{nrg}_1(b_t, a)$$
 
+### 4. MATD3 (Multi-Agent NOMA TD3)
+A multi-agent architecture designed for NOMA CRNs where multiple Secondary Users share the same relay:
+*   **Decentralized GRU Actors**: Each Secondary User processes its local observation history using a GRU to form a Belief State.
+*   **Centralized Relay**: A Coordination Agent concatenates belief states from all SUs to make a centralized relay decision.
+*   **Centralized Critics (CTDE)**: Training utilizes a centralized information vector feeding into three dedicated critics ($Q_{Throughput}$, $Q_{QoS}$, and $Q_{Energy}$) to coordinate the global policy.
+
+### 5. CENT_NOMA_TD3 (Centralized Flat NOMA TD3)
+A fully centralized variant of NOMA TD3 for comparison purposes:
+*   **Global Observation**: Assumes perfect sharing of instantaneous CSI and observations across all SUs.
+*   **Single Joint Policy**: Evaluates and outputs all SU and relay actions from a single centralized policy network.
+
 ---
 
 # 🚀 Project Features
@@ -123,6 +134,8 @@ A novel custom architecture specifically redesigned for Overlay CRNs:
 *   **Standard TD3**: Benchmark for deterministic policy gradient agents.
 *   **Underlay TD3 Agent**: Recreates the original Underlay TD3 algorithm under standard constraints.
 *   **Overlay TD3 Agent**: Novel research-grade extension optimized for cooperative Decode-and-Forward networks.
+*   **MATD3 Agent**: Advanced NOMA multi-agent coordination with CTDE.
+*   **Centralized NOMA TD3 Agent**: Baseline for fully centralized multi-user environments.
 *   **Sequence Replay Buffer**: Supports flat transition indexing and sequential sampling.
 *   **GRU Belief Encoder**: Addresses Rayleigh fading partial observability.
 *   **Multi-objective Critics**: Independent value estimation for rates, violations, and energy.
@@ -255,8 +268,12 @@ CRN-RL-Framework/
 │
 ├── agents/
 │   ├── models.py          # GRU Encoder, Actor, and Twin Critics
+│   ├── matd3_networks.py  # Centralized critics and decentralized actors for MATD3
 │   ├── buffers.py         # Sequence Replay Buffers (flat/episodic/overlay)
+│   ├── ma_buffers.py      # Multi-agent replay buffers
 │   ├── train_td3.py       # Training logic for TD3, Underlay TD3, Overlay TD3
+│   ├── matd3.py           # Training logic and architecture for MATD3
+│   ├── cent_noma_td3.py   # Training logic for Centralized Flat NOMA TD3
 │   ├── evaluate.py        # Standalone evaluation & checkpoint loader
 │   └── benchmark.py       # Comparative benchmarking automation
 │
@@ -322,6 +339,8 @@ Algorithms implemented:
 - **TD3**
 - **Underlay TD3**
 - **Overlay TD3**
+- **MATD3**
+- **Centralized NOMA TD3**
 
 ---
 
@@ -583,11 +602,12 @@ Every experiment run automatically archives:
 # 📑 Documentation
 
 For additional design details, audit structures, and reports:
-*   [OVERLAY_CAMO_DESIGN.md](file:///d:/Mini%20Project/crn_overlay-/OVERLAY_CAMO_DESIGN.md) — Mathematical redesign derivations.
-*   [PHASE1_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of Underlay TD3.
-*   [PHASE2_IMPLEMENTATION_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/PHASE2_IMPLEMENTATION_REPORT.md) — Implementation details of Overlay TD3.
-*   [IMPLEMENTATION_AUDIT_REPORT.md](file:///d:/Mini%20Project/crn_overlay-/IMPLEMENTATION_AUDIT_REPORT.md) — Repository structural and mathematical audit.
-*   [FINAL_CHECKLIST.md](file:///d:/Mini%20Project/crn_overlay-/FINAL_CHECKLIST.md) — Verification checklist matrix.
+*   [OVERLAY_CAMO_DESIGN.md](docs/OVERLAY_CAMO_DESIGN.md) — Mathematical redesign derivations.
+*   [MATD3_ARCHITECTURE.md](docs/MATD3_ARCHITECTURE.md) — MATD3 structural and mathematical details.
+*   [PHASE1_IMPLEMENTATION_REPORT.md](docs/PHASE1_IMPLEMENTATION_REPORT.md) — Adaption of Underlay TD3.
+*   [PHASE2_IMPLEMENTATION_REPORT.md](docs/PHASE2_IMPLEMENTATION_REPORT.md) — Implementation details of Overlay TD3.
+*   [IMPLEMENTATION_AUDIT_REPORT.md](docs/IMPLEMENTATION_AUDIT_REPORT.md) — Repository structural and mathematical audit.
+*   [FINAL_CHECKLIST.md](docs/FINAL_CHECKLIST.md) — Verification checklist matrix.
 
 ---
 

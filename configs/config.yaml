@@ -1,7 +1,7 @@
 # Master Configuration File
 
 algorithm:
-  name: OVERLAY_TD3  # Supported options: TD3, UNDERLAY_TD3, OVERLAY_TD3
+  name: OVERLAY_TD3  # Supported options: TD3, UNDERLAY_TD3, OVERLAY_TD3, MATD3, CENT_NOMA_TD3
 
 simulation:
   seed: 42

@@ -6,6 +6,7 @@ import os
 import json
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from typing import Dict, List, Any, Optional
 
 # Premium color palette for all agents
@@ -232,116 +233,102 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
         f.write("\n".join(lines) + "\n")
     return report_path
 
-def generate_pdf_report(md_path: str, pdf_path: str, agents=None) -> str:
-    """Compile the professional PDF report matching the legacy Matplotlib layout."""
-    import os
-    try:
-        from cli.legacy_plotter import generate_legacy_pdf, RunMetrics
-    except ImportError as e:
-        print(f"Warning: Legacy plotter not found: {e}")
-        return ""
+def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, prefix=""):
+    """Generate a comprehensive multi-page PDF report."""
+    os.makedirs(output_dir, exist_ok=True)
+    report_path = os.path.join(output_dir, f"{prefix}research_report.pdf")
+    
+    if agents is None:
+        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+    metrics_by_agent = {a: load_metrics_for_agent(experiments_dir, a) for a in agents}
+    active = [a for a in agents if metrics_by_agent[a]]
+
+    plt.style.use('default')
+    plt.rcParams.update({'figure.dpi': 300, 'axes.grid': True, 'grid.alpha': 0.3})
+    
+    with PdfPages(report_path) as pdf:
+        # 1. Learning Curve
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, rew = _agent_series(metrics_by_agent[agent], "rewards")
+            if rew is not None:
+                ax.plot(ep, smooth_curve(rew, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Mean Evaluation Return')
+        ax.set_title('Learning Curve — Mean Evaluation Return vs Episode')
+        ax.legend()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 2. SU Throughput
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, th = _agent_series(metrics_by_agent[agent], "throughput_s")
+            if th is not None:
+                se = th / BANDWIDTH_HZ
+                ax.plot(ep, smooth_curve(se, 0.9), color=COLORS[agent], linewidth=2, label=f"{SHORT_NAMES[agent]} (Sum Rate)")
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Secondary Rate $R_s$ (bits/s/Hz)')
+        ax.set_title('Secondary User Sum-Rate Throughput vs Episode')
+        ax.legend()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 3. PU Throughput
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, th_p = _agent_series(metrics_by_agent[agent], "pu_throughput")
+            if th_p is not None:
+                se_p = th_p / BANDWIDTH_HZ
+                ax.plot(ep, smooth_curve(se_p, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Primary Rate $R_p$ (bits/s/Hz)')
+        ax.set_title('Primary User Throughput vs Episode')
+        ax.legend()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 4. Outage Probability
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, pu = _agent_series(metrics_by_agent[agent], "outage")
+            if pu is not None:
+                ax.plot(ep, pu, color=COLORS[agent], linewidth=2, label=f'{SHORT_NAMES[agent]} — PU outage')
+            ep_s, su = _agent_series(metrics_by_agent[agent], "su_outage")
+            if su is not None:
+                ax.plot(ep_s, su, color=COLORS[agent], linewidth=1.5, linestyle='--', label=f'{SHORT_NAMES[agent]} — SU outage')
+        ax.set_ylim(-0.02, 1.0)
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Outage Probability')
+        ax.set_title('Primary and Secondary Outage Probability')
+        ax.legend(fontsize=9)
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 5. SINR vs BER (SU & PU) - Scatter plot
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            runs = metrics_by_agent[agent]
+            if not runs: continue
+            hist = runs[-1].get("history", {})
+            if "sinr_db_pts" in hist and "ber_pts" in hist and len(hist["sinr_db_pts"]) > 0:
+                ax.scatter(hist["sinr_db_pts"], hist["ber_pts"], color=COLORS[agent], alpha=0.5, s=10, label=f'{SHORT_NAMES[agent]} (SU)')
+            if "pu_sinr_db_pts" in hist and "pu_ber_pts" in hist and len(hist["pu_sinr_db_pts"]) > 0:
+                ax.scatter(hist["pu_sinr_db_pts"], hist["pu_ber_pts"], color=COLORS[agent], alpha=0.5, marker='x', s=10, label=f'{SHORT_NAMES[agent]} (PU)')
+        ax.set_yscale('log')
+        ax.set_xlabel('SINR (dB)')
+        ax.set_ylabel('Bit Error Rate (BER)')
+        ax.set_title('Theoretical BER vs SINR Scatter')
+        ax.grid(True, which="both", ls="--")
         
-    try:
-        experiments_dir = os.path.abspath(os.path.join(os.path.dirname(md_path), ".."))
-        if agents is None:
-            agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
-        
-        all_metrics = []
-        n_eps = 0
-        steps_per_ep = 200 # Default fallback
-        nakagami_m = 1.0
-        pu_sinr_threshold_linear = 1.2589
-        outage_desc = "Outage Penalty"
-        
-        for agent in agents:
-            runs = load_metrics_for_agent(experiments_dir, agent)
-            if not runs:
-                continue
+        # Deduplicate legends for scatter plot
+        handles, labels = ax.get_legend_handles_labels()
+        by_label = dict(zip(labels, handles))
+        if by_label:
+            ax.legend(by_label.values(), by_label.keys())
             
-            run = runs[-1] # Use the latest run for plots
-            
-            # Extract config dynamically from the first valid run found
-            config_path = os.path.join(run.get("path", ""), "config_snapshot.yaml")
-            if os.path.exists(config_path):
-                import yaml
-                try:
-                    with open(config_path, "r") as f:
-                        cfg = yaml.safe_load(f)
-                    fading = cfg.get("channel", {}).get("fading_type", "rayleigh")
-                    nakagami_m = 1.0 if fading == "rayleigh" else 3.0
-                    
-                    pu_rate = cfg.get("camo_td3", {}).get("pu_rate_threshold", 0.5)
-                    pu_sinr_threshold_linear = (2.0 ** pu_rate) - 1.0
-                    
-                    int_thresh = cfg.get("camo_td3", {}).get("interference_limit_dbm", -80.0)
-                    outage_desc = f"Interference at PR > {int_thresh} dBm"
-                    steps_per_ep = cfg.get("simulation", {}).get("time_steps_per_episode", 200)
-                except Exception as ex:
-                    print("Could not parse config:", ex)
-                    
-            hist = run.get("history", {})
-            m = RunMetrics(name=agent)
-            
-            # Map metrics.json to legacy format
-            m.episodes = hist.get("episodes", [])
-            m.rewards = hist.get("rewards", [])
-            m.su_throughputs = [x / BANDWIDTH_HZ for x in hist.get("throughput_s", [])]
-            m.pu_throughputs = hist.get("pu_throughput", [])
-            m.outage_probs = hist.get("outage", [])
-            m.avg_bers = hist.get("ber", [])
-            
-            m.sinr_db_pts = hist.get("sinr_db_pts", [])
-            m.ber_pts = hist.get("ber_pts", [])
-            m.pu_sinr_db_pts = hist.get("pu_sinr_db_pts", [])
-            m.pu_ber_pts = hist.get("pu_ber_pts", [])
-            
-            # Fill summary table stats
-            m.final_avg_reward = run.get("eval_reward", 0.0)
-            m.final_avg_su_tput = run.get("eval_su_throughput", 0.0) / BANDWIDTH_HZ if run.get("eval_su_throughput") else 0.0
-            
-            if len(m.pu_throughputs) > 0:
-                m.final_avg_pu_tput = sum(m.pu_throughputs[-100:]) / min(100, len(m.pu_throughputs))
-            else:
-                m.final_avg_pu_tput = 0.0
-                
-            m.final_outage_prob = run.get("eval_pu_outage", 0.0)
-            m.final_avg_ber = hist.get("ber", [0.0])[-1] if hist.get("ber") else 0.0
-            m.training_time_sec = run.get("train_time", 0.0)
-            
-            eps_list = hist.get("episodes", [])
-            if eps_list and len(eps_list) > n_eps:
-                n_eps = len(eps_list)
-                
-            all_metrics.append(m)
-            
-        generate_legacy_pdf(
-            all_metrics, 
-            pdf_path, 
-            n_episodes=n_eps, 
-            steps_per_ep=steps_per_ep,
-            nakagami_m=nakagami_m,
-            pu_sinr_threshold_linear=pu_sinr_threshold_linear,
-            outage_desc=outage_desc
-        )
-        
-        # Rename the file dynamically based on specifications
-        import time
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        # Provide fallback if int_thresh isn't parsed
-        try:
-            ith_val = int_thresh
-        except NameError:
-            ith_val = "unknown"
-            
-        is_noma = "MATD3" in agents
-        prefix = "noma_report" if is_noma else "report"
-            
-        new_name = f"{prefix}_ep{n_eps}_nak{nakagami_m}_Ith{ith_val}_{timestamp}.pdf"
-        new_pdf_path = os.path.join(os.path.dirname(pdf_path), new_name)
-        if os.path.exists(pdf_path):
-            os.rename(pdf_path, new_pdf_path)
-            return new_pdf_path
-        return pdf_path
-    except Exception as e:
-        print(f"Warning: PDF generation failed: {e}")
-        return ""
+        pdf.savefig(fig)
+        plt.close(fig)
+
+    return report_path
+
