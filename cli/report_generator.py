@@ -369,13 +369,16 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
             if not runs: continue
             hist = runs[-1].get("history", {})
             if "sinr_db_pts" in hist and "ber_pts" in hist and len(hist["sinr_db_pts"]) > 0:
-                ax.scatter(hist["sinr_db_pts"], hist["ber_pts"], color=COLORS[agent], alpha=0.5, s=10, label=f'{SHORT_NAMES[agent]} (SU)')
+                ber_arr = np.maximum(np.array(hist["ber_pts"]), 1e-8)
+                ax.scatter(hist["sinr_db_pts"], ber_arr, color=COLORS[agent], alpha=0.5, s=10, label=f'{SHORT_NAMES[agent]} (SU)')
             if "pu_sinr_db_pts" in hist and "pu_ber_pts" in hist and len(hist["pu_sinr_db_pts"]) > 0:
-                ax.scatter(hist["pu_sinr_db_pts"], hist["pu_ber_pts"], color=COLORS[agent], alpha=0.5, marker='x', s=10, label=f'{SHORT_NAMES[agent]} (PU)')
+                pu_ber_arr = np.maximum(np.array(hist["pu_ber_pts"]), 1e-8)
+                ax.scatter(hist["pu_sinr_db_pts"], pu_ber_arr, color=COLORS[agent], alpha=0.5, marker='x', s=10, label=f'{SHORT_NAMES[agent]} (PU)')
         ax.set_yscale('log')
+        ax.set_ylim(bottom=1e-8, top=1.0)
         ax.set_xlabel('SINR (dB)')
         ax.set_ylabel('Bit Error Rate (BER)')
-        ax.set_title('Theoretical BER vs SINR Scatter')
+        ax.set_title('Theoretical BER vs SINR Scatter (with $10^{-8}$ Hardware Floor)')
         ax.grid(True, which="both", ls="--")
         
         # Deduplicate legends for scatter plot
