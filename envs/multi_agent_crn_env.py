@@ -119,7 +119,8 @@ class MultiAgentCRNEnv(gym.Env):
         
         # Compatibility keys for runner logging
         info["throughput_reward"] = info["sum_rate"]
-        info["primary_throughput"] = info["pu_rate"]
+        info["pu_throughput"] = info["pu_rate"]
+        info["sinr_su"] = float(np.mean(info["gamma_e2e"])) if "gamma_e2e" in info else 0.0
         info["average_power"] = (sum(info["p_su_watts"]) + info["p_relay_watts"]) / (self.num_agents + 1)
         info["outage"] = 1.0 if info["constraint_violated"] else 0.0
         info["su_outage"] = 1.0 if info["sum_rate"] <= 0.0 else 0.0

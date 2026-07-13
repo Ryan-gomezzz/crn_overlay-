@@ -85,6 +85,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         "relay_success": [],
         "qos_satisfaction": [],
         "constraint_satisfaction": [],
+        "per_user_rates": [],
     }
 
     energy_limit = env.energy_limit if hasattr(env, 'energy_limit') else 1.0
@@ -104,6 +105,7 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         ep_relay_success = []
         ep_qos_satisfaction = []
         ep_constraint_satisfaction = []
+        ep_per_user_rates = []
 
         while not (done or truncated):
             action = agent.select_action(obs, info, explore=False)
@@ -125,6 +127,10 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
 
             con_sat = 1.0 if (info.get("outage", 0) == 0.0 and info.get("average_power", 0) <= energy_limit) else 0.0
             ep_constraint_satisfaction.append(con_sat)
+            
+            per_user = info.get("per_user_rates", [])
+            if per_user:
+                ep_per_user_rates.append(per_user)
 
         eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
         eval_metrics["throughput_p"].append(np.mean(ep_throughput_p))
@@ -136,8 +142,10 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
         eval_metrics["qos_satisfaction"].append(np.mean(ep_qos_satisfaction))
         eval_metrics["constraint_satisfaction"].append(np.mean(ep_constraint_satisfaction))
         eval_metrics["total_reward"].append(episode_reward)
+        if ep_per_user_rates:
+            eval_metrics["per_user_rates"].append(np.mean(ep_per_user_rates, axis=0).tolist())
 
-    avg_metrics = {k: float(np.mean(v)) for k, v in eval_metrics.items()}
+    avg_metrics = {k: float(np.mean(v)) if k != "per_user_rates" else (np.mean(v, axis=0).tolist() if len(v) > 0 else []) for k, v in eval_metrics.items()}
     return avg_metrics
 
 class HybridWriter:
@@ -303,7 +311,12 @@ def run_single_train(
         "ber_pts": [],
         "pu_sinr_db_pts": [],
         "pu_ber_pts": [],
-        "pu_throughput": []
+        "pu_throughput": [],
+        "average_power": [],
+        "relay_success": [],
+        "qos_satisfaction": [],
+        "constraint_satisfaction": [],
+        "per_user_rates": []
     }
     
     scatter_budget = max(1, 12000 // max(episodes, 1))
@@ -373,6 +386,12 @@ def run_single_train(
                 history["su_outage"].append(eval_metrics.get("su_outage", 0.0))
                 history["ber"].append(eval_metrics["ber"])
                 history["pu_throughput"].append(sum(ep_pu_throughput) / len(ep_pu_throughput) if ep_pu_throughput else 0.0)
+                history["average_power"].append(eval_metrics["average_power"])
+                history["relay_success"].append(eval_metrics["relay_success"])
+                history["qos_satisfaction"].append(eval_metrics["qos_satisfaction"])
+                history["constraint_satisfaction"].append(eval_metrics["constraint_satisfaction"])
+                if "per_user_rates" in eval_metrics and eval_metrics["per_user_rates"]:
+                    history["per_user_rates"].append(eval_metrics["per_user_rates"])
                 
                 log_print(
                     f"\n[EVAL @ Step {global_step}] "
@@ -458,6 +477,8 @@ def run_single_train(
         "eval_su_throughput": final_metrics["throughput_s"],
         "eval_pu_outage": final_metrics["outage"],
         "eval_su_outage": final_metrics.get("su_outage", 0.0),
+        "eval_average_power": final_metrics.get("average_power", 0.0),
+        "eval_relay_success": final_metrics.get("relay_success", 0.0),
         "history": history
     }
     

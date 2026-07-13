@@ -140,7 +140,7 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str, agent
         if th is None:
             continue
         plotted = True
-        se = th / BANDWIDTH_HZ
+        se = th / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th
         ax2.plot(ep, se, color=COLORS[agent], alpha=0.30, linewidth=0.8)
         ax2.plot(ep, smooth_curve(se, factor=0.9), color=COLORS[agent],
                  linewidth=2, label=f'{SHORT_NAMES[agent]} (EMA)')
@@ -195,6 +195,8 @@ def _run_summary(runs: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         "eval_su_throughput": _mean("eval_su_throughput"),
         "eval_pu_outage": _mean("eval_pu_outage"),
         "eval_su_outage": _mean("eval_su_outage"),
+        "eval_average_power": _mean("eval_average_power"),
+        "eval_relay_success": _mean("eval_relay_success"),
         "train_time": _mean("train_time"),
         "inf_time": _mean("inf_time"),
         "episodes": episodes,
@@ -211,8 +213,8 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
         agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
     lines = ["# CRN Overlay Framework — Experimental Report", "",
              "Metrics below are read directly from each run's `metrics.json`.", ""]
-    lines.append("| Algorithm | Episodes | Seeds | Mean Return | SU Rate (bits/s/Hz) | PU Outage | SU Outage | Train Time (s) |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    lines.append("| Algorithm | Episodes | Seeds | Mean Return | SU Rate (bits/s/Hz) | PU Outage | SU Outage | Avg Power (W) | Relay Success | Train Time (s) |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
     if "MATD3" in agents:
         lines.append("")
         lines.append("> **Note:** NOMA agents were trained with highly aggressive Lagrangian multipliers (`lambda_qos_init=50.0`, `penalty_coef_inf=50.0`) to strictly enforce Primary User outage constraints.")
@@ -222,11 +224,13 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
         if not s:
             lines.append(f"| {SHORT_NAMES[agent]} | *no runs* | - | - | - | - | - | - |")
             continue
-        se = (s["eval_su_throughput"] / BANDWIDTH_HZ) if s["eval_su_throughput"] is not None else None
+        se = (s["eval_su_throughput"] / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else s["eval_su_throughput"]) if s["eval_su_throughput"] is not None else None
         lines.append(
             f"| {SHORT_NAMES[agent]} | {s['episodes']} | {s['seeds']} | "
             f"{s['eval_reward']:.3e} | {se:.4f} | {s['eval_pu_outage']:.4f} | "
             f"{(s['eval_su_outage'] if s['eval_su_outage'] is not None else 0.0):.4f} | "
+            f"{(s['eval_average_power'] if s.get('eval_average_power') is not None else 0.0):.4f} | "
+            f"{(s['eval_relay_success'] if s.get('eval_relay_success') is not None else 0.0):.4f} | "
             f"{s['train_time']:.1f} |"
         )
     with open(report_path, "w", encoding="utf-8") as f:
@@ -265,7 +269,7 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         for agent in active:
             ep, th = _agent_series(metrics_by_agent[agent], "throughput_s")
             if th is not None:
-                se = th / BANDWIDTH_HZ
+                se = th / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th
                 ax.plot(ep, smooth_curve(se, 0.9), color=COLORS[agent], linewidth=2, label=f"{SHORT_NAMES[agent]} (Sum Rate)")
         ax.set_xlabel('Episode')
         ax.set_ylabel('Secondary Rate $R_s$ (bits/s/Hz)')
@@ -279,7 +283,7 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         for agent in active:
             ep, th_p = _agent_series(metrics_by_agent[agent], "pu_throughput")
             if th_p is not None:
-                se_p = th_p / BANDWIDTH_HZ
+                se_p = th_p / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th_p
                 ax.plot(ep, smooth_curve(se_p, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
         ax.set_xlabel('Episode')
         ax.set_ylabel('Primary Rate $R_p$ (bits/s/Hz)')
@@ -305,7 +309,60 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         pdf.savefig(fig)
         plt.close(fig)
 
-        # 5. SINR vs BER (SU & PU) - Scatter plot
+        # 5. Average Power
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, ap = _agent_series(metrics_by_agent[agent], "average_power")
+            if ap is not None:
+                ax.plot(ep, smooth_curve(ap, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Average Power (W)')
+        ax.set_title('Average Power Consumption vs Episode')
+        ax.legend()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 6. Relay Success & QoS Satisfaction
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for agent in active:
+            ep, rs = _agent_series(metrics_by_agent[agent], "relay_success")
+            if rs is not None:
+                ax.plot(ep, smooth_curve(rs, 0.9), color=COLORS[agent], linewidth=2, label=f'{SHORT_NAMES[agent]} — Relay Decode Success')
+            ep_q, qs = _agent_series(metrics_by_agent[agent], "qos_satisfaction")
+            if qs is not None:
+                ax.plot(ep_q, smooth_curve(qs, 0.9), color=COLORS[agent], linewidth=1.5, linestyle=':', label=f'{SHORT_NAMES[agent]} — QoS Satisfaction')
+        ax.set_ylim(-0.02, 1.02)
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Rate (0 to 1)')
+        ax.set_title('Relay Decode Success & QoS Satisfaction vs Episode')
+        ax.legend(fontsize=9)
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 7. Individual SU Throughput
+        fig, ax = plt.subplots(figsize=(10, 6))
+        plotted_individual = False
+        for agent in active:
+            runs = metrics_by_agent[agent]
+            if not runs: continue
+            hist = runs[-1].get("history", {})
+            if "per_user_rates" in hist and len(hist["per_user_rates"]) > 0:
+                rates_arr = np.array(hist["per_user_rates"])
+                episodes = np.array(hist["episodes"])
+                if len(rates_arr.shape) == 2:
+                    for i in range(rates_arr.shape[1]):
+                        plotted_individual = True
+                        ax.plot(episodes, smooth_curve(rates_arr[:, i], 0.9), color=COLORS[agent], alpha=0.5, linewidth=1.5, label=f'{SHORT_NAMES[agent]} — SU {i+1}')
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Individual Rate (bits/s/Hz)')
+        ax.set_title('Individual SU Throughput vs Episode (NOMA Fairness)')
+        if plotted_individual:
+            ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1, 0.5))
+            fig.tight_layout()
+            pdf.savefig(fig)
+        plt.close(fig)
+
+        # 8. SINR vs BER (SU & PU) - Scatter plot
         fig, ax = plt.subplots(figsize=(10, 6))
         for agent in active:
             runs = metrics_by_agent[agent]
