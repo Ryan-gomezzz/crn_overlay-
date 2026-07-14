@@ -73,7 +73,7 @@ def set_seed(seed: int):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def evaluate_policy(agent, env, episodes: int = 5) -> dict:
+def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) -> dict:
     eval_metrics = {
         "throughput_s": [],
         "throughput_p": [],
@@ -131,6 +131,18 @@ def evaluate_policy(agent, env, episodes: int = 5) -> dict:
             per_user = info.get("per_user_rates", [])
             if per_user:
                 ep_per_user_rates.append(per_user)
+                
+            if dump_trace_path:
+                trace_entry = {
+                    "episode": _ + 1,
+                    "step": len(ep_throughput_s),
+                    "reward": reward,
+                    "throughput": info.get("throughput_reward", 0),
+                    "outage": info.get("outage", 0),
+                    "alpha": info.get("alpha", 0)
+                }
+                with open(dump_trace_path, "a") as f:
+                    f.write(json.dumps(trace_entry) + "\n")
 
         eval_metrics["throughput_s"].append(np.mean(ep_throughput_s))
         eval_metrics["throughput_p"].append(np.mean(ep_throughput_p))
@@ -664,8 +676,12 @@ def handle_evaluate(args: Any):
         
     agent.load(checkpoint_path)
     
+    trace_path = os.path.join(args.output_dir, "animation_trace.jsonl")
+    if os.path.exists(trace_path):
+        os.remove(trace_path)
+        
     print(f"Evaluating policy over {args.episodes} episodes...")
-    metrics = evaluate_policy(agent, env, episodes=args.episodes)
+    metrics = evaluate_policy(agent, env, episodes=args.episodes, dump_trace_path=trace_path)
     
     print("\n" + "=" * 50)
     print(f"             EVALUATION REPORT: {SHORT_NAMES_MAP.get(args.agent, args.agent)}")
@@ -677,6 +693,7 @@ def handle_evaluate(args: Any):
     print(f"Average BER:         {metrics['ber']:.4f}")
     print(f"Average Power:       {metrics['average_power']:.4f} W")
     print("=" * 50)
+    print(f"Animation trace saved to: {trace_path}")
     print_footer()
 
 def handle_benchmark(args: Any):

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRN Cooperative Overlay Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Dashboard -->
+        <aside class="sidebar glass">
+            <h1>CRN Visualizer</h1>
+            <p class="subtitle">True Cooperative Overlay</p>
+            
+            <div class="metrics-panel">
+                <div class="metric-card">
+                    <h3>Episode</h3>
+                    <span id="metric-ep">0</span>
+                </div>
+                <div class="metric-card">
+                    <h3>Step</h3>
+                    <span id="metric-step">0</span>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Reward</h3>
+                    <span id="metric-reward">0.00</span>
+                </div>
+                <div class="metric-card">
+                    <h3>SU Throughput</h3>
+                    <span id="metric-su-rate">0.00</span> bps/Hz
+                </div>
+                <div class="metric-card">
+                    <h3>PU Outage</h3>
+                    <span id="metric-pu-outage">0.00</span>%
+                </div>
+                <div class="metric-card">
+                    <h3>Power Splitting (&alpha;)</h3>
+                    <span id="metric-alpha">0.00</span>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button id="btn-load" class="btn primary">Load Trace</button>
+                <input type="file" id="file-input" accept=".json" style="display: none;">
+                
+                <div class="playback-controls">
+                    <button id="btn-prev" class="btn">&laquo;</button>
+                    <button id="btn-play" class="btn">Play</button>
+                    <button id="btn-next" class="btn">&raquo;</button>
+                </div>
+                
+                <div class="speed-control">
+                    <label for="speed">Speed:</label>
+                    <input type="range" id="speed" min="100" max="2000" value="800" dir="rtl">
+                </div>
+                
+                <div class="status" id="status-text">Waiting for trace...</div>
+            </div>
+        </aside>
+
+        <!-- Main Visualization Area -->
+        <main class="visualization-area glass">
+            <div class="legend">
+                <span class="dot pu-dot"></span> PU Signal
+                <span class="dot su-dot"></span> SU Signal
+            </div>
+            
+            <!-- Canvas container for relative positioning -->
+            <div class="canvas-container" id="canvas-container">
+                <canvas id="sim-canvas"></canvas>
+            </div>
+            
+            <div class="timeslot-indicator" id="timeslot-indicator">
+                Slot 1: SU &rarr; Relay, PT &rarr; PR
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
