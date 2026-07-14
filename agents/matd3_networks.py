@@ -50,15 +50,14 @@ class MAActorNetwork(nn.Module):
 
 
 class MACriticNetwork(nn.Module):
-    def __init__(self, num_agents: int, hidden_dim: int = 256):
+    def __init__(self, num_agents: int, action_dim: int, hidden_dim: int = 256):
         super().__init__()
         
         # Centralized critic takes beliefs of all agents + actions of all agents + relay action
         # State dim = 64 * num_agents
-        # Action dim = num_agents + 1
         
         self.state_dim = 64 * num_agents
-        self.action_dim = num_agents + 1
+        self.action_dim = action_dim
         self.input_dim = self.state_dim + self.action_dim
         
         # Q1 architecture
@@ -93,7 +92,7 @@ class MACriticNetwork(nn.Module):
 
 
 class CentralizedRelayActor(nn.Module):
-    def __init__(self, num_agents: int, hidden_dim: int = 256):
+    def __init__(self, num_agents: int, action_dim: int = 1, hidden_dim: int = 256):
         super().__init__()
         # Takes all agents' beliefs (N * 64) as input
         self.input_dim = num_agents * 64
@@ -102,7 +101,7 @@ class CentralizedRelayActor(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, 1),
+            nn.Linear(hidden_dim, action_dim),
             nn.Sigmoid()
         )
 

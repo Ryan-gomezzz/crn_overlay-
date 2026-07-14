@@ -59,7 +59,7 @@ class MultiAgentCRNEnv(gym.Env):
         self.num_agents = self.simulator.num_agents
         
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(self.num_agents + 1,), dtype=np.float32
+            low=0.0, high=1.0, shape=(self.num_agents + 2,), dtype=np.float32
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.num_agents, 8), dtype=np.float32

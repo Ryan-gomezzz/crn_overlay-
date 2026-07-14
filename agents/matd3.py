@@ -57,18 +57,18 @@ class MATD3Agent:
         ])
         self.actor_targets = copy.deepcopy(self.actors)
         
-        # 2. Centralized Actor for Relay
-        self.relay_actor = CentralizedRelayActor(num_agents=self.num_agents).to(self.device)
+        # 2. Centralized Actor for Relay (outputs [p_relay, alpha])
+        self.relay_actor = CentralizedRelayActor(num_agents=self.num_agents, action_dim=2).to(self.device)
         self.relay_actor_target = copy.deepcopy(self.relay_actor)
         
         # 3. Centralized Critics (Thr, QoS, Nrg)
-        self.critic_thr = MACriticNetwork(num_agents=self.num_agents).to(self.device)
+        self.critic_thr = MACriticNetwork(num_agents=self.num_agents, action_dim=self.num_agents + 2).to(self.device)
         self.critic_thr_target = copy.deepcopy(self.critic_thr)
         
-        self.critic_qos = MACriticNetwork(num_agents=self.num_agents).to(self.device)
+        self.critic_qos = MACriticNetwork(num_agents=self.num_agents, action_dim=self.num_agents + 2).to(self.device)
         self.critic_qos_target = copy.deepcopy(self.critic_qos)
         
-        self.critic_nrg = MACriticNetwork(num_agents=self.num_agents).to(self.device)
+        self.critic_nrg = MACriticNetwork(num_agents=self.num_agents, action_dim=self.num_agents + 2).to(self.device)
         self.critic_nrg_target = copy.deepcopy(self.critic_nrg)
         
         # --- Optimizers ---
@@ -131,7 +131,7 @@ class MATD3Agent:
         
         hist_tensor = torch.FloatTensor(hist).unsqueeze(0).to(self.device)  # (1, N, L, 11)
         
-        actions = np.zeros(self.num_agents + 1, dtype=np.float32)
+        actions = np.zeros(self.num_agents + 2, dtype=np.float32)
         beliefs = []
         
         # 1. Get SU actions
@@ -151,13 +151,13 @@ class MATD3Agent:
         global_belief = torch.cat(beliefs, dim=1) # (1, N*64)
         self.relay_actor.eval()
         with torch.no_grad():
-            a_r = self.relay_actor(global_belief) # (1, 1)
+            a_r = self.relay_actor(global_belief) # (1, 2)
         self.relay_actor.train()
-        actions[self.num_agents] = a_r.cpu().item()
+        actions[self.num_agents:] = a_r.cpu().numpy()[0]
         
         if explore:
             # Simple Gaussian noise exploration
-            noise = np.random.normal(0, self.exploration_noise, size=self.num_agents + 1)
+            noise = np.random.normal(0, self.exploration_noise, size=self.num_agents + 2)
             actions = actions + noise
             actions = np.clip(actions, 0.0, 1.0)
             

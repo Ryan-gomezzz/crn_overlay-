@@ -287,96 +287,97 @@ class NOMAOverlaySimulator:
         N = cfg.num_su
         action = np.asarray(action, dtype=np.float64).flatten()
 
-        # Pad or truncate action to (N+1,)
-        if action.shape[0] < N + 1:
-            action = np.pad(action, (0, N + 1 - action.shape[0]))
-        action = np.clip(action[: N + 1], 0.0, 1.0)
+        # Pad or truncate action to (N+2,)
+        if action.shape[0] < N + 2:
+            action = np.pad(action, (0, N + 2 - action.shape[0]))
+        action = np.clip(action[: N + 2], 0.0, 1.0)
 
         # Convert normalised actions → Watts
         p_su = action[:N] * cfg.p_max_su    # shape (N,)
         p_relay = float(action[N]) * cfg.p_max_su
+        alpha = float(action[N+1])          # Power splitting factor [0, 1]
         p_pt = cfg.p_pt
         N0 = cfg.noise_power
         g = self._eff_gains  # shorthand
 
         # ==============================================================
-        # TIME SLOT 1 — All SUs → Relay  (+ PT → Relay as interference)
+        # TIME SLOT 1 — All SUs → Relay  (+ PT → Relay)
         # ==============================================================
-        #
-        # Received at relay:
-        #   y_r = Σ_i √P_si · h_sr_i · x_si + √P_p · h_pr · x_p + n_r
-        #
-        # SIC at relay: decode in descending order of P_si · |h_sr_i|²
-        # (effective received signal strength).
-        #
-        # For user decoded at position k in the SIC order:
-        #   γ_sr_k = (P_sk · |h_sr_k|²) /
-        #            (Σ_{j decoded after k} P_sj·|h_sr_j|² + P_p·|h_pr|² + N_0)
-        # ----------------------------------------------------------
-
-        # Received powers at relay from each SU
+        
+        rx_power_pr = p_pt * g["pr_link"]
         rx_power_sr = np.array(
             [p_su[i] * g[f"sr_{i}"] for i in range(N)], dtype=np.float64
         )
-
-        # SIC order: decode strongest first (descending rx power)
-        sic_order = np.argsort(-rx_power_sr)  # indices sorted strongest → weakest
-
-        # Primary interference at relay (constant across SIC stages)
-        pt_interference_relay = p_pt * g["pr_link"]
-
-        # Compute per-user SINR at relay after SIC
+        total_su_rx = float(rx_power_sr.sum())
+        
+        # Relay decodes PU first (SUs treated as interference)
+        gamma_relay_pu = rx_power_pr / max(total_su_rx + N0, 1e-30)
+        
+        # Relay decodes SUs using SIC (assuming PU is subtracted)
+        sic_order = np.argsort(-rx_power_sr)
+        
         gamma_sr = np.zeros(N, dtype=np.float64)
         for rank, idx in enumerate(sic_order):
-            # Residual NOMA interference = signals from users decoded later
             later_users = sic_order[rank + 1:]
             noma_residual = float(rx_power_sr[later_users].sum()) if len(later_users) > 0 else 0.0
-            denom = noma_residual + pt_interference_relay + N0
+            # PU is already decoded and subtracted, so no pt_interference_relay here
+            denom = noma_residual + N0
             gamma_sr[idx] = rx_power_sr[idx] / max(denom, 1e-30)
 
         # ==============================================================
         # TIME SLOT 2 — Relay → SU Dest  (+ PT → SU Dest as interference)
         # ==============================================================
-        #
-        # Received at destination:
-        #   y_d = √P_r · h_rd · x_r + √P_p · h_pd · x_p + n_d
-        #
-        # γ_rd = (P_r · |h_rd|²) / (P_p · |h_pd|² + N_0)
-        # ----------------------------------------------------------
-
-        signal_rd = p_relay * g["rd"]
-        interference_dest = p_pt * g["pd"]
-        gamma_rd = signal_rd / max(interference_dest + N0, 1e-30)
+        
+        p_relay_pu = alpha * p_relay
+        p_relay_su = (1.0 - alpha) * p_relay
+        
+        interference_dest_pt = p_pt * g["pd"]
+        
+        # Destination receives relayed PU signal and relayed SU signal
+        rx_sud_pu = p_relay_pu * g["rd"]
+        rx_sud_su = p_relay_su * g["rd"]
+        
+        # Destination decodes PU first, subtracts it, then decodes SU
+        gamma_sud_pu = rx_sud_pu / max(rx_sud_su + interference_dest_pt + N0, 1e-30)
+        gamma_sud_su = rx_sud_su / max(interference_dest_pt + N0, 1e-30)
 
         # ==============================================================
         # End-to-end DF rates
         # ==============================================================
-        #   γ_e2e_i = min(γ_sr_i, γ_rd)
-        #   R_i     = (1/2) · log2(1 + γ_e2e_i)
 
-        gamma_e2e = np.minimum(gamma_sr, gamma_rd)
+        gamma_e2e = np.minimum(gamma_sr, gamma_sud_su)
         rates = 0.5 * np.log2(1.0 + gamma_e2e)   # shape (N,)
         sum_rate = float(rates.sum())
 
         # ==============================================================
         # Interference constraint at PR
         # ==============================================================
-        #   I_PR = Σ_i P_si · |h_sp_i|² + P_r · |h_rp|²
-        #
-        # (worst-case: slot 1 SU interference + slot 2 relay interference)
+        # Slot 1 SU interference + Slot 2 SU interference (worst-case sum)
+        # The relayed PU signal (p_relay_pu) is NOT interference to PR.
 
-        i_pr_su = float(
-            sum(p_su[i] * g[f"sp_{i}"] for i in range(N))
-        )
-        i_pr_relay = p_relay * g["rp"]
-        interference_at_pr = i_pr_su + i_pr_relay
+        i_pr_su_slot1 = float(sum(p_su[i] * g[f"sp_{i}"] for i in range(N)))
+        i_pr_relay_su_slot2 = p_relay_su * g["rp"]
+        interference_at_pr = i_pr_su_slot1 + i_pr_relay_su_slot2
         constraint_violated = interference_at_pr > cfg.interference_threshold
 
         # ==============================================================
-        # Primary network throughput (for diagnostics)
+        # Primary network throughput (Selection Combining)
         # ==============================================================
-        signal_pu = p_pt * g["pp"]
-        sinr_pu = signal_pu / max(interference_at_pr + N0, 1e-30)
+        
+        signal_pu_slot1 = p_pt * g["pp"]
+        snr_pu_direct = signal_pu_slot1 / max(i_pr_su_slot1 + N0, 1e-30)
+        
+        # Slot 2 Relay transmission to PR
+        signal_pu_slot2_relay = p_relay_pu * g["rp"]
+        # Slot 2 PT interference (assuming PT transmits new data)
+        interference_pr_slot2 = p_pt * g["pp"] + i_pr_relay_su_slot2
+        snr_pu_relayed_hop2 = signal_pu_slot2_relay / max(interference_pr_slot2 + N0, 1e-30)
+        
+        # End-to-end relayed PU SNR
+        snr_pu_relayed = min(gamma_relay_pu, snr_pu_relayed_hop2)
+        
+        # Selection Combining at PR
+        sinr_pu = max(snr_pu_direct, snr_pu_relayed)
         pu_rate = 0.5 * math.log2(1.0 + sinr_pu)
 
         # ==============================================================
@@ -402,7 +403,7 @@ class NOMAOverlaySimulator:
             "sum_rate": sum_rate,
             "per_user_rates": rates.tolist(),
             "gamma_sr": gamma_sr.tolist(),
-            "gamma_rd": float(gamma_rd),
+            "gamma_rd": float(gamma_sud_su),
             "gamma_e2e": gamma_e2e.tolist(),
             "sic_order": sic_order.tolist(),
             "interference_at_pr": float(interference_at_pr),
@@ -410,8 +411,11 @@ class NOMAOverlaySimulator:
             "constraint_violated": bool(constraint_violated),
             "pu_rate": float(pu_rate),
             "sinr_pu": float(sinr_pu),
+            "snr_pu_direct": float(snr_pu_direct),
+            "snr_pu_relayed": float(snr_pu_relayed),
             "p_su_watts": p_su.tolist(),
             "p_relay_watts": float(p_relay),
+            "alpha": float(alpha),
             "effective_gains": dict(self._eff_gains),
         }
 
