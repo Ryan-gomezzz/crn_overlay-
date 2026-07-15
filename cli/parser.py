@@ -74,8 +74,8 @@ def str_to_bool(val: str) -> bool:
 
 def add_common_overrides(parser: argparse.ArgumentParser):
     """Add training/execution parameters overrides to parser."""
-    parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Number of training episodes (1-50000)")
-    parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
+    parser.add_argument("--episodes", type=validate_episodes, default=None, help="Number of training episodes (1-50000). Defaults to config.yaml")
+    parser.add_argument("--steps", type=validate_steps, default=None, help="Steps per episode (200-2000). Defaults to config.yaml")
     parser.add_argument("--seed", type=validate_seed, help=f"Random seed to use {VALID_SEEDS}")
     parser.add_argument("--all-seeds", action="store_true", help="Run execution over all valid seeds (42, 123, 2026)")
     parser.add_argument("--device", choices=["cpu", "cuda"], help="Computation device (cpu or cuda)")
@@ -125,8 +125,8 @@ def get_parser() -> argparse.ArgumentParser:
     bench_parser.add_argument("--all-seeds", action="store_true", help="Run benchmark across all predefined seeds")
     bench_parser.add_argument("--device", choices=["cpu", "cuda"], help="Computation device (cpu or cuda)")
     bench_parser.add_argument("--output-dir", type=str, default="experiments", help="Base output directory")
-    bench_parser.add_argument("--episodes", type=validate_episodes, default=2000, help="Episodes per agent in benchmark (1-50000)")
-    bench_parser.add_argument("--steps", type=validate_steps, default=500, help="Steps per episode (200-2000)")
+    bench_parser.add_argument("--episodes", type=validate_episodes, default=None, help="Episodes per agent in benchmark (1-50000). Defaults to config.yaml")
+    bench_parser.add_argument("--steps", type=validate_steps, default=None, help="Steps per episode (200-2000). Defaults to config.yaml")
 
     # 4. Compare Subcommand
     compare_parser = subparsers.add_parser("compare", help="Compare training/evaluation results and generate summary stats")
