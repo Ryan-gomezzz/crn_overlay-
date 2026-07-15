@@ -276,8 +276,11 @@ def run_single_train(
         log_print(f"Recovered state: global_step={global_step}, start_episode={start_episode}")
 
     # Training settings
-    episodes = getattr(args, "episodes", 2000)
-    steps_per_episode = config["simulation"].get("time_steps_per_episode", 500)
+    steps_per_episode = config["simulation"].get("time_steps_per_episode", 100)
+    if hasattr(args, "episodes") and args.episodes is not None:
+        episodes = args.episodes
+    else:
+        episodes = max(1, config["training"].get("total_steps", 100000) // steps_per_episode)
     start_steps = config["training"].get("start_steps", 1000)
     eval_interval = config["evaluation"].get("eval_interval", 500)
     eval_episodes = config["evaluation"].get("eval_episodes", 5)
