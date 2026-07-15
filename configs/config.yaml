@@ -46,8 +46,8 @@ camo_td3:
   penalty_coef_qos: 10.0          # Penalty coefficient for PU QoS constraint
   penalty_coef_nrg: 1.0           
   lr_lambda: 0.001                
-  lambda_inf_init: 50.0           # Greatly increased 
-  lambda_qos_init: 50.0           # Greatly increased to force 0% PU Outage
+  lambda_inf_init: 1.0           # Normal initial value
+  lambda_qos_init: 1.0           # Normal initial value
   lambda_nrg_init: 0.001          
   lambda_clamp_max: 200.0         # Increased to allow huge penalties
   eta_explore_init: 0.05

@@ -35,6 +35,7 @@ class MAActorNetwork(nn.Module):
         embedded = self.embed(x)
         embedded = embedded.reshape(B, L, 32)
         
+        self.gru.flatten_parameters()
         gru_out, _ = self.gru(embedded)
         belief = gru_out[:, -1, :]  # (B, 64)
         
