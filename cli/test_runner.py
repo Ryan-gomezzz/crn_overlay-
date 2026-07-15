@@ -7,8 +7,8 @@ import yaml
 import pytest
 import numpy as np
 import torch
-from envs.crn_env import OverlayCRNEnv
-from agents.train_td3 import TD3Agent
+from envs.multi_agent_crn_env import make_ma_crn_env
+from agents.matd3 import MATD3Agent
 class DummyWriter:
     """Mock TensorBoard SummaryWriter to prevent crash when TB is disabled."""
     def add_scalar(self, name, value, step):
@@ -48,7 +48,7 @@ def validate_yaml_config(config_path: str = "configs/config.yaml") -> tuple[bool
 
     # Value constraints
     if "algorithm" in config and "name" in config["algorithm"]:
-        valid_algos = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+        valid_algos = ["MATD3"]
         if config["algorithm"]["name"] not in valid_algos:
             errors.append(f"Invalid algorithm name: '{config['algorithm']['name']}'. Choose from: {valid_algos}")
 
@@ -80,9 +80,9 @@ def run_agent_smoke_test(algo_name: str) -> bool:
         config["simulation"]["time_steps_per_episode"] = 10
         
         set_seed(42)
-        env = OverlayCRNEnv(config)
+        env = make_ma_crn_env(config_path)
         device = "cpu" # Smoke test on CPU for speed and reliability
-        agent = TD3Agent(config, device=device)
+        agent = MATD3Agent(config, device=device)
         
         obs, info = env.reset()
         
@@ -149,7 +149,7 @@ def run_all_tests() -> int:
 
     # 3. Agent Smoke Tests
     print("\n[3/3] Running Agent Smoke Tests (5-step training runs)...")
-    smoke_algos = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+    smoke_algos = ["MATD3"]
     smoke_results = {}
     for algo in smoke_algos:
         print(f"  Testing {algo}...")

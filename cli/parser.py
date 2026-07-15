@@ -8,11 +8,7 @@ from typing import List, Optional
 
 # Valid algorithms mapping
 AGENT_MAP = {
-    "td3": "TD3",
-    "underlay": "UNDERLAY_TD3",
-    "overlay": "OVERLAY_TD3",
-    "matd3": "MATD3",
-    "cent_noma_td3": "CENT_NOMA_TD3"
+    "matd3": "MATD3"
 }
 
 REVERSE_AGENT_MAP = {v: k for k, v in AGENT_MAP.items()}
@@ -108,7 +104,7 @@ def get_parser() -> argparse.ArgumentParser:
     train_parser = subparsers.add_parser("train", help="Train one or more RL agents")
     # Support both singular and plural arguments
     agent_group = train_parser.add_mutually_exclusive_group(required=True)
-    agent_group.add_argument("--agent", type=parse_agent, help="Algorithm to train (td3, underlay, overlay)")
+    agent_group.add_argument("--agent", type=parse_agent, help="Algorithm to train (matd3)")
     agent_group.add_argument("--agents", nargs="+", type=parse_agent, help="List of algorithms to train sequentially")
     add_common_overrides(train_parser)
 
@@ -148,7 +144,7 @@ def get_parser() -> argparse.ArgumentParser:
 
     # 7. Resume Subcommand
     resume_parser = subparsers.add_parser("resume", help="Resume training from latest checkpoint of an algorithm")
-    resume_parser.add_argument("--agent", type=parse_agent, required=True, help="Algorithm to resume (td3, underlay, overlay)")
+    resume_parser.add_argument("--agent", type=parse_agent, required=True, help="Algorithm to resume (matd3)")
     add_common_overrides(resume_parser) # Allow modifying training specs upon resume
 
     # 8. Test Subcommand

@@ -95,26 +95,11 @@ G --> H
 
 The repository supports three distinct reinforcement learning agents:
 
-### 1. TD3 (Twin Delayed DDPG Baseline)
-A standard baseline implementation for comparison:
-*   **Twin Critics**: Mitigates target value overestimation bias by tracking the minimum of two value estimators.
-*   **Delayed Policy Updates**: Updates the actor network less frequently than the critics to ensure target stability.
-*   **Target Policy Smoothing**: Adds target noise to actions to reduce Q-value function variance.
-
-### 2. Underlay TD3 (Original Underlay TD3 adaptation)
-Fulfills the original Underlay TD3 design methodology:
-*   **GRU Belief Encoder**: Processes historical sequences of length $L=10$ observations and actions to tackle partial observability.
-*   **Sequence Replay Buffer**: Episode-aware sampling ensuring clean boundary tracking.
-*   **Lagrangian Constrained Optimization**: Learns softplus-parameterized multipliers $\lambda_{inf}$ and $\lambda_{nrg}$ to restrict interference power and energy.
-*   **Directional Safety Exploration**: Actively pushes exploration paths away from constraint boundaries.
-
-### 3. Overlay TD3 (Overlay Cooperative Custom Redesign)
-A novel custom architecture specifically redesigned for Overlay CRNs:
-*   **Relay & QoS-Aware Belief State**: Encoder input sequence expands to 8D by integrating previous slot relay decoding success ($D_{relay}$) and PU outage event ($O_{pu}$) history.
-*   **Direct Quality of Service Constraint**: Enforces PU rate $R_p \ge R_{threshold}$ directly using a dedicated QoS Critic pair, ensuring cooperative compliance.
-*   **Dual Lagrangian Optimization**: Learnable constraints for PU rate ($R_{threshold} - Q^{QoS} \le 0$) and SU power ($Q^{nrg} - E_{limit} \le 0$).
-*   **Cooperative Safety Exploration**: Exploration gradient biases power allocations to maximize PU rate while minimizing SU energy:
-    $$v_t = \lambda_{QoS} \cdot \nabla_a Q^{QoS}_1(b_t, a) - \lambda_{nrg} \cdot \nabla_a Q^{nrg}_1(b_t, a)$$
+### 1. MATD3 (Multi-Agent NOMA TD3)
+A multi-agent architecture designed for NOMA CRNs where multiple Secondary Users share the same relay:
+*   **Decentralized GRU Actors**: Each Secondary User processes its local observation history using a GRU to form a Belief State.
+*   **Centralized Relay**: A Coordination Agent concatenates belief states from all SUs to make a centralized relay decision.
+*   **Centralized Critics (CTDE)**: Training utilizes a centralized information vector feeding into three dedicated critics ($Q_{Throughput}$, $Q_{QoS}$, and $Q_{Energy}$) to coordinate the global policy.
 
 ### 4. MATD3 (Multi-Agent NOMA TD3)
 A multi-agent architecture designed for NOMA CRNs where multiple Secondary Users share the same relay:
@@ -131,11 +116,7 @@ A fully centralized variant of NOMA TD3 for comparison purposes:
 
 # 🚀 Project Features
 
-*   **Standard TD3**: Benchmark for deterministic policy gradient agents.
-*   **Underlay TD3 Agent**: Recreates the original Underlay TD3 algorithm under standard constraints.
-*   **Overlay TD3 Agent**: Novel research-grade extension optimized for cooperative Decode-and-Forward networks.
 *   **MATD3 Agent**: Advanced NOMA multi-agent coordination with CTDE.
-*   **Centralized NOMA TD3 Agent**: Baseline for fully centralized multi-user environments.
 *   **Sequence Replay Buffer**: Supports flat transition indexing and sequential sampling.
 *   **GRU Belief Encoder**: Addresses Rayleigh fading partial observability.
 *   **Multi-objective Critics**: Independent value estimation for rates, violations, and energy.
@@ -269,13 +250,8 @@ CRN-RL-Framework/
 ├── agents/
 │   ├── models.py          # GRU Encoder, Actor, and Twin Critics
 │   ├── matd3_networks.py  # Centralized critics and decentralized actors for MATD3
-│   ├── buffers.py         # Sequence Replay Buffers (flat/episodic/overlay)
 │   ├── ma_buffers.py      # Multi-agent replay buffers
-│   ├── train_td3.py       # Training logic for TD3, Underlay TD3, Overlay TD3
-│   ├── matd3.py           # Training logic and architecture for MATD3
-│   ├── cent_noma_td3.py   # Training logic for Centralized Flat NOMA TD3
-│   ├── evaluate.py        # Standalone evaluation & checkpoint loader
-│   └── benchmark.py       # Comparative benchmarking automation
+│   └── matd3.py           # Training logic and architecture for MATD3
 │
 ├── baselines/
 │   ├── random_policy.py
@@ -424,21 +400,19 @@ Use these quick examples to get started with the framework's primary commands:
 
 ```bash
 # 1. Train individual agents
-python main.py train --agent td3
-python main.py train --agent underlay
-python main.py train --agent overlay
+python main.py train --agent matd3
 
 # 2. Benchmark all algorithms
 python main.py benchmark
 
 # 3. Resume training from the latest checkpoint
-python main.py resume --agent overlay
+python main.py resume --agent matd3
 
 # 4. Evaluate a checkpoint
-python main.py evaluate --agent overlay
+python main.py evaluate --agent matd3
 
 # 5. Run training for all three predefined research seeds
-python main.py train --agent overlay --all-seeds
+python main.py train --agent matd3 --all-seeds
 ```
 
 ---
@@ -449,18 +423,13 @@ The `train` subcommand allows you to train individual agents or sequences of age
 
 ### Train Individual Agents
 ```bash
-python main.py train --agent td3
-python main.py train --agent underlay
-python main.py train --agent overlay
+python main.py train --agent matd3
 ```
 
 ### Train Multiple Agents
 To run multiple agents sequentially:
 ```bash
-python main.py train --agents td3 underlay
-python main.py train --agents td3 overlay
-python main.py train --agents underlay overlay
-python main.py train --agents td3 underlay overlay
+python main.py train --agents matd3
 ```
 *Note: Agents are trained sequentially under identical experimental conditions (e.g. channel fading layouts, coordinate grids) to ensure a fair and scientifically sound comparison.*
 
@@ -471,21 +440,14 @@ python main.py train --agents td3 underlay overlay
 ### Multi-Agent Benchmarks
 Benchmark runs training across the selected algorithms and automatically outputs evaluation comparisons:
 ```bash
-# Run default benchmark (TD3 -> Underlay TD3 -> Overlay TD3)
+# Run default benchmark
 python main.py benchmark
-
-# Run benchmark for a subset of algorithms
-python main.py benchmark --agents td3 overlay
-python main.py benchmark --agents underlay overlay
-python main.py benchmark --agents td3 underlay
 ```
 
 ### Deterministic Policy Evaluation
 Evaluate a trained model's performance over a set number of episodes:
 ```bash
-python main.py evaluate --agent td3
-python main.py evaluate --agent underlay
-python main.py evaluate --agent overlay
+python main.py evaluate --agent matd3
 ```
 
 ### Resuming Interrupted Runs
@@ -626,16 +588,6 @@ For additional design details, audit structures, and reports:
 - [ ] Research Paper Draft
 - [ ] IEEE Conference Submission
 
----
-
-# 👨‍💻 Team
-
-| Member | Responsibilities |
-|---------|------------------|
-| Ryan | System Model, Repository Architecture, Gymnasium Integration, Final Integration |
-| Sneha | Wireless Channel Models, Rayleigh Fading, Path Loss, Noise Model |
-| Shreya | Relay Protocol, SINR, Time Slot Logic, Interference Model |
-| Aditya | RL Algorithms, TD3/Underlay/Overlay Agents, Training & Evaluation |
 
 ---
 

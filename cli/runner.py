@@ -12,12 +12,8 @@ import numpy as np
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-from envs.crn_env import OverlayCRNEnv
 from envs.multi_agent_crn_env import make_ma_crn_env
-from envs.flat_noma_env import make_flat_noma_env
-from agents.train_td3 import TD3Agent
 from agents.matd3 import MATD3Agent
-from agents.cent_noma_td3 import CentNOMATD3Agent
 from cli.logger import ProgressLogger, print_header, print_footer
 from cli.parser import AGENT_MAP, REVERSE_AGENT_MAP, VALID_SEEDS
 from cli.report_generator import generate_comparison_plots, generate_markdown_report, generate_pdf_report
@@ -212,24 +208,11 @@ def run_single_train(
     set_seed(seed)
     
     # Instantiate environment & agent
-    if agent_name == "MATD3":
-        env = make_ma_crn_env(config_path)  # Simplified config loading
-        env.action_space.seed(seed)
-        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
-        agent = MATD3Agent(config, device=device)
-    elif agent_name == "CENT_NOMA_TD3":
-        env = make_flat_noma_env(config_path)
-        env.action_space.seed(seed)
-        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
-        agent = CentNOMATD3Agent(config, device=device)
-    else:
-        env = OverlayCRNEnv(config)
-        env.action_space.seed(seed)
-        device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
-        agent = TD3Agent(config, device=device)
+    env = make_ma_crn_env(config_path)
+    env.action_space.seed(seed)
+    device = args.device if (hasattr(args, "device") and args.device) else ("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"\nTraining {agent_name} | Seed {seed} | Device: {device}")
+    agent = MATD3Agent(config, device=device)
     
     # Setup Output Run Directory
     timestamp = get_timestamp()
@@ -484,12 +467,7 @@ def run_single_train(
     if os.path.exists(best_path):
         agent.load(best_path)
         
-    if agent_name == "MATD3":
-        eval_env = make_ma_crn_env(config_path)
-    elif agent_name == "CENT_NOMA_TD3":
-        eval_env = make_flat_noma_env(config_path)
-    else:
-        eval_env = OverlayCRNEnv(config)
+    eval_env = make_ma_crn_env(config_path)
         
     final_metrics = evaluate_policy(agent, eval_env, episodes=20)
     
@@ -598,13 +576,7 @@ def find_checkpoint(output_dir: str, agent_name: str) -> Optional[str]:
     """Find the checkpoint path matching the agent name with legacy fallbacks."""
     ckpt_dir = os.path.join(output_dir, "checkpoints")
     
-    # Standard names and legacy names mapping
-    legacy_map = {
-        "UNDERLAY_TD3": "CAMO_TD3",
-        "OVERLAY_TD3": "OVERLAY_CAMO_TD3",
-        "TD3": "TD3"
-    }
-    legacy_agent = legacy_map.get(agent_name, agent_name)
+    legacy_agent = agent_name
     
     # 1. Direct check in checkpoints directory
     for name in [agent_name, legacy_agent]:
@@ -636,16 +608,7 @@ def find_checkpoint(output_dir: str, agent_name: str) -> Optional[str]:
             except Exception:
                 pass
             
-            # Fallback if checkpoint metadata load fails (e.g. key missing)
-            if agent_name == "TD3":
-                if "td3" in low_file and not any(x in low_file or x in low_root for x in ["underlay", "overlay", "camo"]):
-                    return full_path
-            elif agent_name == "UNDERLAY_TD3":
-                if ("underlay" in low_file or "camo" in low_file or "underlay" in low_root or "camo" in low_root) and "overlay" not in low_file and "overlay" not in low_root:
-                    return full_path
-            elif agent_name == "OVERLAY_TD3":
-                if "overlay" in low_file or "overlay" in low_root:
-                    return full_path
+            # Fallback for matd3 not needed since we only support MATD3
                     
     return None
 
@@ -672,21 +635,10 @@ def handle_evaluate(args: Any):
     
     set_seed(args.seed)
     
-    if args.agent == "MATD3":
-        env = make_ma_crn_env(config_path)
-        env.action_space.seed(args.seed)
-        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
-        agent = MATD3Agent(config, device=device)
-    elif args.agent == "CENT_NOMA_TD3":
-        env = make_flat_noma_env(config_path)
-        env.action_space.seed(args.seed)
-        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
-        agent = CentNOMATD3Agent(config, device=device)
-    else:
-        env = OverlayCRNEnv(config)
-        env.action_space.seed(args.seed)
-        device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
-        agent = TD3Agent(config, device=device)
+    env = make_ma_crn_env(config_path)
+    env.action_space.seed(args.seed)
+    device = args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu")
+    agent = MATD3Agent(config, device=device)
         
     agent.load(checkpoint_path)
     

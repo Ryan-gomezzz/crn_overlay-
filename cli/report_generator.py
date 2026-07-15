@@ -11,19 +11,11 @@ from typing import Dict, List, Any, Optional
 
 # Premium color palette for all agents
 COLORS = {
-    "TD3": "#1f77b4",          # Deep Blue
-    "UNDERLAY_TD3": "#d62728", # Crimson Red
-    "OVERLAY_TD3": "#2ca02c",  # Forest Green
-    "MATD3": "#9467bd",        # Purple
-    "CENT_NOMA_TD3": "#ff7f0e" # Orange
+    "MATD3": "#9467bd"         # Purple
 }
 
 SHORT_NAMES = {
-    "TD3": "TD3",
-    "UNDERLAY_TD3": "Underlay TD3",
-    "OVERLAY_TD3": "Overlay TD3",
-    "MATD3": "MATD3",
-    "CENT_NOMA_TD3": "Cent NOMA TD3"
+    "MATD3": "MATD3"
 }
 
 def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, Any]]:
@@ -31,15 +23,8 @@ def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, A
     agent_dir = os.path.join(experiments_dir, agent.lower())
     metrics_list = []
     if not os.path.exists(agent_dir):
-        folder_map = {
-            "TD3": "td3",
-            "UNDERLAY_TD3": "underlay_td3",
-            "OVERLAY_TD3": "overlay_td3",
-            "CAMO_TD3": "underlay_td3",
-            "OVERLAY_CAMO_TD3": "overlay_td3",
-            "T3": "td3"
-        }
-        agent_dir = os.path.join(experiments_dir, folder_map.get(agent, agent.lower()))
+        # Fallback in case folder is named differently
+        pass
 
     if os.path.exists(agent_dir):
         for run_name in sorted(os.listdir(agent_dir)):
@@ -140,7 +125,7 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str, agent
         if th is None:
             continue
         plotted = True
-        se = th / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th
+        se = th
         ax2.plot(ep, se, color=COLORS[agent], alpha=0.30, linewidth=0.8)
         ax2.plot(ep, smooth_curve(se, factor=0.9), color=COLORS[agent],
                  linewidth=2, label=f'{SHORT_NAMES[agent]} (EMA)')
@@ -210,7 +195,7 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
     os.makedirs(output_dir, exist_ok=True)
     report_path = os.path.join(output_dir, f"{prefix}research_report.md")
     if agents is None:
-        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+        agents = ["MATD3"]
     lines = ["# CRN Overlay Framework — Experimental Report", "",
              "Metrics below are read directly from each run's `metrics.json`.", ""]
     lines.append("| Algorithm | Episodes | Seeds | Mean Return | SU Rate (bits/s/Hz) | PU Outage | SU Outage | Avg Power (W) | Relay Success | Train Time (s) |")
@@ -224,7 +209,7 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
         if not s:
             lines.append(f"| {SHORT_NAMES[agent]} | *no runs* | - | - | - | - | - | - |")
             continue
-        se = (s["eval_su_throughput"] / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else s["eval_su_throughput"]) if s["eval_su_throughput"] is not None else None
+        se = s["eval_su_throughput"] if s["eval_su_throughput"] is not None else None
         lines.append(
             f"| {SHORT_NAMES[agent]} | {s['episodes']} | {s['seeds']} | "
             f"{s['eval_reward']:.3e} | {se:.4f} | {s['eval_pu_outage']:.4f} | "
@@ -243,7 +228,7 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
     report_path = os.path.join(output_dir, f"{prefix}research_report.pdf")
     
     if agents is None:
-        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+        agents = ["MATD3"]
     metrics_by_agent = {a: load_metrics_for_agent(experiments_dir, a) for a in agents}
     active = [a for a in agents if metrics_by_agent[a]]
 
