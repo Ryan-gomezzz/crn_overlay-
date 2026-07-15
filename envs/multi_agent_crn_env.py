@@ -54,6 +54,7 @@ class MultiAgentCRNEnv(gym.Env):
             chan_cfg = self._raw_config["channel"]
             if "noise_power_dbm" in chan_cfg: cfg.noise_power_dbm = float(chan_cfg["noise_power_dbm"])
             if "path_loss_exponent" in chan_cfg: cfg.path_loss_exponent = float(chan_cfg["path_loss_exponent"])
+            if "csi_error_variance" in chan_cfg: cfg.csi_error_variance = float(chan_cfg["csi_error_variance"])
 
         if "multi_user" in self._raw_config:
             mu_cfg = self._raw_config["multi_user"]

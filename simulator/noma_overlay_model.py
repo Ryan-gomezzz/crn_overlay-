@@ -87,7 +87,8 @@ class NOMAConfig:
     noise_power_dbm: float = -114.0
     interference_threshold_dbm: float = -80.0
 
-    # Propagation
+    # Channel Estimation Error (Imperfect CSI)
+    csi_error_variance: float = 0.1
     path_loss_exponent: float = 3.5
 
     # Episode
@@ -231,15 +232,26 @@ class NOMAOverlaySimulator:
     # Channel generation
     # ------------------------------------------------------------------
 
-    def _generate_all_channels(self) -> Dict[str, float]:
+    def _generate_all_channels(self) -> Tuple[Dict[str, float], Dict[str, float]]:
         """Generate Rayleigh fading |g|² for every link and combine
         with path loss to produce effective channel gains |h|² = PL·|g|².
+        Returns both true and estimated effective gains.
         """
-        eff: Dict[str, float] = {}
+        eff_true: Dict[str, float] = {}
+        eff_est: Dict[str, float] = {}
+        tau = self.cfg.csi_error_variance
+        
         for name, pl in self._path_losses.items():
             g = self._fading.generate_coefficient(self._rng)
-            eff[name] = float(abs(g) ** 2) * pl
-        return eff
+            e = self._fading.generate_coefficient(self._rng)
+            
+            # Imperfect CSI estimate
+            g_hat = math.sqrt(1.0 - tau**2) * g + tau * e
+            
+            eff_true[name] = float(abs(g) ** 2) * pl
+            eff_est[name] = float(abs(g_hat) ** 2) * pl
+            
+        return eff_true, eff_est
 
     # ------------------------------------------------------------------
     # Public API
@@ -257,12 +269,12 @@ class NOMAOverlaySimulator:
         """
         self._rng = np.random.default_rng(seed)
         self._step_count = 0
-        self._eff_gains = self._generate_all_channels()
+        self._eff_gains_true, self._eff_gains_est = self._generate_all_channels()
 
         obs = self._build_observations()
         return {
             "observations": obs,
-            "info": {"step": 0, "effective_gains": dict(self._eff_gains)},
+            "info": {"step": 0, "effective_gains_true": dict(self._eff_gains_true), "effective_gains_est": dict(self._eff_gains_est)},
         }
 
     def step(
@@ -298,15 +310,15 @@ class NOMAOverlaySimulator:
         alpha = float(action[N+1])          # Power splitting factor [0, 1]
         p_pt = cfg.p_pt
         N0 = cfg.noise_power
-        g = self._eff_gains  # shorthand
+        g_true = self._eff_gains_true  # shorthand for physics
 
         # ==============================================================
         # TIME SLOT 1 — All SUs → Relay  (+ PT → Relay)
         # ==============================================================
         
-        rx_power_pr = p_pt * g["pr_link"]
+        rx_power_pr = p_pt * g_true["pr_link"]
         rx_power_sr = np.array(
-            [p_su[i] * g[f"sr_{i}"] for i in range(N)], dtype=np.float64
+            [p_su[i] * g_true[f"sr_{i}"] for i in range(N)], dtype=np.float64
         )
         total_su_rx = float(rx_power_sr.sum())
         
@@ -331,11 +343,11 @@ class NOMAOverlaySimulator:
         p_relay_pu = alpha * p_relay
         p_relay_su = (1.0 - alpha) * p_relay
         
-        interference_dest_pt = p_pt * g["pd"]
+        interference_dest_pt = p_pt * g_true["pd"]
         
         # Destination receives relayed PU signal and relayed SU signal
-        rx_sud_pu = p_relay_pu * g["rd"]
-        rx_sud_su = p_relay_su * g["rd"]
+        rx_sud_pu = p_relay_pu * g_true["rd"]
+        rx_sud_su = p_relay_su * g_true["rd"]
         
         # Destination decodes PU first, subtracts it, then decodes SU
         gamma_sud_pu = rx_sud_pu / max(rx_sud_su + interference_dest_pt + N0, 1e-30)
@@ -355,8 +367,8 @@ class NOMAOverlaySimulator:
         # Slot 1 SU interference + Slot 2 SU interference (worst-case sum)
         # The relayed PU signal (p_relay_pu) is NOT interference to PR.
 
-        i_pr_su_slot1 = float(sum(p_su[i] * g[f"sp_{i}"] for i in range(N)))
-        i_pr_relay_su_slot2 = p_relay_su * g["rp"]
+        i_pr_su_slot1 = float(sum(p_su[i] * g_true[f"sp_{i}"] for i in range(N)))
+        i_pr_relay_su_slot2 = p_relay_su * g_true["rp"]
         interference_at_pr = i_pr_su_slot1 + i_pr_relay_su_slot2
         constraint_violated = interference_at_pr > cfg.interference_threshold
 
@@ -364,13 +376,13 @@ class NOMAOverlaySimulator:
         # Primary network throughput (Selection Combining)
         # ==============================================================
         
-        signal_pu_slot1 = p_pt * g["pp"]
+        signal_pu_slot1 = p_pt * g_true["pp"]
         snr_pu_direct = signal_pu_slot1 / max(i_pr_su_slot1 + N0, 1e-30)
         
         # Slot 2 Relay transmission to PR
-        signal_pu_slot2_relay = p_relay_pu * g["rp"]
+        signal_pu_slot2_relay = p_relay_pu * g_true["rp"]
         # Slot 2 PT interference (assuming PT transmits new data)
-        interference_pr_slot2 = p_pt * g["pp"] + i_pr_relay_su_slot2
+        interference_pr_slot2 = p_pt * g_true["pp"] + i_pr_relay_su_slot2
         snr_pu_relayed_hop2 = signal_pu_slot2_relay / max(interference_pr_slot2 + N0, 1e-30)
         
         # End-to-end relayed PU SNR
@@ -395,7 +407,7 @@ class NOMAOverlaySimulator:
         truncated = self._step_count >= cfg.max_steps
 
         # Generate new channels for the next observation
-        self._eff_gains = self._generate_all_channels()
+        self._eff_gains_true, self._eff_gains_est = self._generate_all_channels()
         obs = self._build_observations()
 
         info: Dict[str, Any] = {
@@ -416,7 +428,8 @@ class NOMAOverlaySimulator:
             "p_su_watts": p_su.tolist(),
             "p_relay_watts": float(p_relay),
             "alpha": float(alpha),
-            "effective_gains": dict(self._eff_gains),
+            "effective_gains_true": dict(self._eff_gains_true),
+            "effective_gains_est": dict(self._eff_gains_est),
         }
 
         return {
@@ -441,19 +454,19 @@ class NOMAOverlaySimulator:
             Numpy float32 array of shape ``(N, 8)``.
         """
         N = self.cfg.num_su
-        g = self._eff_gains
+        g_est = self._eff_gains_est
 
         # Common features (same for every agent)
         common = np.array(
-            [g["pp"], g["pr_link"], g["pd"], g["rd"], g["rp"]],
+            [g_est["pp"], g_est["pr_link"], g_est["pd"], g_est["rd"], g_est["rp"]],
             dtype=np.float32,
         )
 
         obs = np.zeros((N, self.OBS_DIM), dtype=np.float32)
         for i in range(N):
-            obs[i, 0] = g[f"sr_{i}"]
-            obs[i, 1] = g[f"sp_{i}"]
-            obs[i, 2] = g[f"sd_{i}"]
+            obs[i, 0] = g_est[f"sr_{i}"]
+            obs[i, 1] = g_est[f"sp_{i}"]
+            obs[i, 2] = g_est[f"sd_{i}"]
             obs[i, 3:] = common
 
         # Convert raw gains (~1e-10 to 1e-4) into decibels
