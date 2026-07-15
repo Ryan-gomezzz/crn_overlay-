@@ -133,6 +133,7 @@ class MultiAgentCRNEnv(gym.Env):
         # Compatibility keys for runner logging
         info["throughput_reward"] = info["sum_rate"]
         info["pu_throughput"] = info["pu_rate"]
+        info["primary_throughput"] = info["pu_rate"]
         info["sinr_su"] = float(np.mean(info["gamma_e2e"])) if "gamma_e2e" in info else 0.0
         info["average_power"] = (sum(info["p_su_watts"]) + info["p_relay_watts"]) / (self.num_agents + 1)
         info["outage"] = 1.0 if info["constraint_violated"] else 0.0
@@ -149,6 +150,7 @@ class MultiAgentCRNEnv(gym.Env):
         # Actually in NOMA simulator, everyone is decoded in sic_order, but we can just use 1 for simplicity 
         # or base it on gamma_sr > 0
         dec = (np.array(info["gamma_sr"]) > 1e-6).astype(np.float32)
+        info["relay_decoded"] = float(np.mean(dec))
         self._dec_history = np.roll(self._dec_history, -1, axis=1)
         self._dec_history[:, -1, 0] = dec
         
