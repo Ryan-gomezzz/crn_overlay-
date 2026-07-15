@@ -90,7 +90,7 @@ def generate_comparison_plots(experiments_dir: str, output_plots_dir: str, agent
     os.makedirs(output_plots_dir, exist_ok=True)
 
     if agents is None:
-        agents = ["TD3", "UNDERLAY_TD3", "OVERLAY_TD3"]
+        agents = ["MATD3"]
     metrics_by_agent = {a: load_metrics_for_agent(experiments_dir, a) for a in agents}
     active = [a for a in agents if metrics_by_agent[a]]
 
