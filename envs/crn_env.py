@@ -317,4 +317,26 @@ def _build_simulator_config(
     if "penalty_coef_inf" in flat:
         kwargs["penalty_weight"] = float(flat["penalty_coef_inf"])
 
+    # Handle Coordinate Distance Computation
+    import math
+    def euclidean(a, b):
+        return math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2)
+        
+    if "pt_coords" in flat and "pr_coords" in flat:
+        kwargs["d_pt_pr"] = euclidean(flat["pt_coords"], flat["pr_coords"])
+    if "pt_coords" in flat and "sur_coords" in flat:
+        kwargs["d_pt_relay"] = euclidean(flat["pt_coords"], flat["sur_coords"])
+    if "sus_coords" in flat and "sur_coords" in flat:
+        kwargs["d_su_relay"] = euclidean(flat["sus_coords"], flat["sur_coords"])
+    if "sur_coords" in flat and "pr_coords" in flat:
+        kwargs["d_relay_pr"] = euclidean(flat["sur_coords"], flat["pr_coords"])
+    if "sur_coords" in flat and "sud_coords" in flat:
+        kwargs["d_relay_sud"] = euclidean(flat["sur_coords"], flat["sud_coords"])
+    if "sus_coords" in flat and "sud_coords" in flat:
+        kwargs["d_su_sud"] = euclidean(flat["sus_coords"], flat["sud_coords"])
+    if "pt_coords" in flat and "sud_coords" in flat:
+        kwargs["d_pt_sud"] = euclidean(flat["pt_coords"], flat["sud_coords"])
+    if "sus_coords" in flat and "pr_coords" in flat:
+        kwargs["d_su_pr"] = euclidean(flat["sus_coords"], flat["pr_coords"])
+
     return SimulatorConfig(**kwargs)

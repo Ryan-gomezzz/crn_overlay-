@@ -42,13 +42,26 @@ class MultiAgentCRNEnv(gym.Env):
         
         # Build NOMAConfig
         cfg = NOMAConfig()
+        
+        if "network" in self._raw_config:
+            net_cfg = self._raw_config["network"]
+            if "p_primary" in net_cfg: cfg.p_primary_dbm = float(net_cfg["p_primary"])
+            if "p_max_su" in net_cfg: cfg.p_max_su_dbm = float(net_cfg["p_max_su"])
+            if "pt_coords" in net_cfg: cfg.pt_coords = net_cfg["pt_coords"]
+            if "pr_coords" in net_cfg: cfg.pr_coords = net_cfg["pr_coords"]
+            
+        if "channel" in self._raw_config:
+            chan_cfg = self._raw_config["channel"]
+            if "noise_power_dbm" in chan_cfg: cfg.noise_power_dbm = float(chan_cfg["noise_power_dbm"])
+            if "path_loss_exponent" in chan_cfg: cfg.path_loss_exponent = float(chan_cfg["path_loss_exponent"])
+
         if "multi_user" in self._raw_config:
             mu_cfg = self._raw_config["multi_user"]
             if "num_su" in mu_cfg: cfg.num_su = mu_cfg["num_su"]
             if "su_coords" in mu_cfg: cfg.su_coords = mu_cfg["su_coords"]
             if "sud_coords" in mu_cfg: cfg.sud_coords = mu_cfg["sud_coords"]
             if "sur_coords" in mu_cfg: cfg.sur_coords = mu_cfg["sur_coords"]
-            if "interference_threshold_dbm" in mu_cfg: cfg.interference_threshold_dbm = mu_cfg["interference_threshold_dbm"]
+            if "interference_threshold_dbm" in mu_cfg: cfg.interference_threshold_dbm = float(mu_cfg["interference_threshold_dbm"])
             
         if "camo_td3" in self._raw_config:
             camo_cfg = self._raw_config["camo_td3"]
