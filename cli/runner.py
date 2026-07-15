@@ -442,6 +442,20 @@ def run_single_train(
             outage=info.get("outage", 0.0)
         )
         
+        # LIVE VISUALIZER DUMP
+        trace_path = os.path.join(output_dir, "animation_trace.jsonl")
+        trace_entry = {
+            "episode": ep,
+            "step": global_step,
+            "reward": episode_reward,
+            "throughput": info.get("throughput_reward", 0.0),
+            "outage": info.get("outage", 0.0),
+            "alpha": info.get("alpha", 0.0)
+        }
+        with open(trace_path, "a") as f:
+            import json
+            f.write(json.dumps(trace_entry) + "\n")
+        
         # Periodic checkpoint
         if checkpoint_every and ep % checkpoint_every == 0:
             p_path = os.path.join(ckpt_dir, f"checkpoint_ep_{ep}.pth")

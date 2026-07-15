@@ -268,6 +268,9 @@ _YAML_KEY_MAP: Dict[str, str] = {
 }
 
 
+def dbm_to_watts(dbm: float) -> float:
+    return 10.0 ** ((dbm - 30.0) / 10.0)
+
 def _build_simulator_config(
     raw: Dict[str, Any],
 ) -> SimulatorConfig:
@@ -279,7 +282,7 @@ def _build_simulator_config(
     flat: Dict[str, Any] = {}
 
     # Flatten nested sections
-    for section_key in ("network", "channel", "simulation", "environment"):
+    for section_key in ("network", "channel", "simulation", "environment", "camo_td3"):
         section = raw.get(section_key)
         if isinstance(section, dict):
             flat.update(section)
@@ -294,5 +297,24 @@ def _build_simulator_config(
     for yaml_key, field_name in _YAML_KEY_MAP.items():
         if yaml_key in flat:
             kwargs[field_name] = flat[yaml_key]
+
+    # Handle dBm conversions if present
+    if "p_primary" in flat:
+        kwargs["p_pt"] = dbm_to_watts(float(flat["p_primary"]))
+    
+    if "p_max_su" in flat:
+        # Note: config.yaml has p_max_su which applies to SUs and SUR
+        p_su_watts = dbm_to_watts(float(flat["p_max_su"]))
+        kwargs["p_max_su"] = p_su_watts
+        kwargs["p_max_relay"] = p_su_watts
+        
+    if "noise_power_dbm" in flat:
+        kwargs["noise_power"] = dbm_to_watts(float(flat["noise_power_dbm"]))
+        
+    if "interference_limit_dbm" in flat:
+        kwargs["interference_threshold"] = dbm_to_watts(float(flat["interference_limit_dbm"]))
+
+    if "penalty_coef_inf" in flat:
+        kwargs["penalty_weight"] = float(flat["penalty_coef_inf"])
 
     return SimulatorConfig(**kwargs)
