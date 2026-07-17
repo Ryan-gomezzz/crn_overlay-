@@ -202,7 +202,10 @@ def generate_markdown_report(experiments_dir: str, output_dir: str, agents=None,
     lines.append("|---|---|---|---|---|---|---|---|---|---|")
     if "MATD3" in agents:
         lines.append("")
-        lines.append("> **Note:** NOMA agents were trained with highly aggressive Lagrangian multipliers (`lambda_qos_init=50.0`, `penalty_coef_inf=50.0`) to strictly enforce Primary User outage constraints.")
+        lines.append("> **Note:** The secondary sum-rate objective is optimized under an interference "
+                     "constraint at the PR, enforced jointly by an environment penalty "
+                     "(`camo_td3.penalty_coef_inf`) and adaptive Lagrangian multipliers "
+                     "(QoS/energy). Exact values are recorded in each run's `config_snapshot.yaml`.")
         lines.append("")
     for agent in agents:
         s = _run_summary(load_metrics_for_agent(experiments_dir, agent))

@@ -369,12 +369,7 @@ def run_single_train(
                 
             # Periodic evaluation
             if global_step % eval_interval == 0:
-                if agent_name == "MATD3":
-                    eval_env = make_ma_crn_env(config_path)
-                elif agent_name == "CENT_NOMA_TD3":
-                    eval_env = make_flat_noma_env(config_path)
-                else:
-                    eval_env = OverlayCRNEnv(config)
+                eval_env = make_ma_crn_env(config_path)
                 eval_metrics = evaluate_policy(agent, eval_env, episodes=eval_episodes)
                 
                 history["episodes"].append(ep)
@@ -576,43 +571,29 @@ def handle_train(args: Any):
     print_footer()
 
 def find_checkpoint(output_dir: str, agent_name: str) -> Optional[str]:
-    """Find the checkpoint path matching the agent name with legacy fallbacks."""
+    """Find the newest checkpoint path matching the agent name."""
     ckpt_dir = os.path.join(output_dir, "checkpoints")
-    
-    legacy_agent = agent_name
-    
-    # 1. Direct check in checkpoints directory
-    for name in [agent_name, legacy_agent]:
-        for suffix in ["latest.pth", "best_model.pth", "final_model.pth"]:
+
+    # 1. Direct check in the centralized checkpoints directory
+    for suffix in ["latest.pth", "best_model.pth", "final_model.pth"]:
+        for name in [agent_name, agent_name.lower()]:
             path = os.path.join(ckpt_dir, f"{name}_{suffix}")
             if os.path.exists(path):
                 return path
-            path = os.path.join(ckpt_dir, f"{name.lower()}_{suffix}")
-            if os.path.exists(path):
-                return path
 
-    # 2. Recursive search
+    # 2. Recursive search: verify each checkpoint's stored algorithm name
     for root, _, files in os.walk(output_dir):
         for file in files:
             if not file.endswith(".pth"):
                 continue
-            
-            low_file = file.lower()
-            low_root = root.lower()
             full_path = os.path.join(root, file)
-            
-            # Verify the actual checkpoint contents
             try:
-                ckpt = torch.load(full_path, map_location="cpu")
-                algo = ckpt.get("algorithm", "")
-                mapped_algo = legacy_map.get(algo, algo)
-                if mapped_algo == agent_name:
+                ckpt = torch.load(full_path, map_location="cpu", weights_only=False)
+                if ckpt.get("algorithm", "") == agent_name:
                     return full_path
             except Exception:
                 pass
-            
-            # Fallback for matd3 not needed since we only support MATD3
-                    
+
     return None
 
 def handle_evaluate(args: Any):
@@ -778,67 +759,26 @@ def handle_resume(args: Any):
     print_header(f"Resuming Agent: {args.agent}")
     
     output_dir = args.output_dir
-    agent_folder = args.agent.lower()
-    legacy_agent_folder = args.agent.lower().replace("underlay_", "").replace("overlay_", "")
-    
-    # 1. Look for run directories of this agent
+
+    # 1. Look for the latest run directory of this agent
     checkpoint_path = None
-    
-    folder_map = {
-        "TD3": ["td3"],
-        "UNDERLAY_TD3": ["underlay_td3", "td3"],
-        "OVERLAY_TD3": ["overlay_td3"]
-    }
-    folders = folder_map.get(args.agent, [args.agent.lower()])
-    
-    legacy_map = {
-        "UNDERLAY_TD3": "CAMO_TD3",
-        "OVERLAY_TD3": "OVERLAY_CAMO_TD3",
-        "TD3": "TD3"
-    }
-    
-    for folder in folders:
-        agent_dir = os.path.join(output_dir, folder)
-        if os.path.exists(agent_dir):
-            runs = sorted(os.listdir(agent_dir))
-            # Search backwards to find the latest run containing a checkpoints/final_model.pth or similar
-            for run in reversed(runs):
-                run_path = os.path.join(agent_dir, run)
-                ckpt_dir = os.path.join(run_path, "checkpoints")
-                if os.path.exists(ckpt_dir):
-                    # Prefer final_model.pth or fallback to best_model.pth
-                    for fname in ["final_model.pth", "best_model.pth"]:
-                        path = os.path.join(ckpt_dir, fname)
-                        if os.path.exists(path):
-                            try:
-                                ckpt = torch.load(path, map_location="cpu")
-                                algo = ckpt.get("algorithm", "")
-                                mapped_algo = legacy_map.get(algo, algo)
-                                if mapped_algo == args.agent:
-                                    checkpoint_path = path
-                                    break
-                            except Exception:
-                                pass
-                if checkpoint_path:
+    agent_dir = os.path.join(output_dir, args.agent.lower())
+    if os.path.exists(agent_dir):
+        for run in reversed(sorted(os.listdir(agent_dir))):
+            ckpt_dir = os.path.join(agent_dir, run, "checkpoints")
+            # Prefer final_model.pth, fall back to best_model.pth
+            for fname in ["final_model.pth", "best_model.pth"]:
+                path = os.path.join(ckpt_dir, fname)
+                if os.path.exists(path):
+                    checkpoint_path = path
                     break
             if checkpoint_path:
                 break
-                    
-    # 2. Fallback to centralized checkpoints dir
+
+    # 2. Fallback to the centralized checkpoints dir
     if not checkpoint_path:
-        central_path = os.path.join(output_dir, "checkpoints", f"{args.agent}_latest.pth")
-        if os.path.exists(central_path):
-            checkpoint_path = central_path
-        else:
-            legacy_map = {
-                "UNDERLAY_TD3": "CAMO_TD3",
-                "OVERLAY_TD3": "OVERLAY_CAMO_TD3"
-            }
-            legacy_agent = legacy_map.get(args.agent, args.agent)
-            central_path = os.path.join(output_dir, "checkpoints", f"{legacy_agent}_latest.pth")
-            if os.path.exists(central_path):
-                checkpoint_path = central_path
-            
+        checkpoint_path = find_checkpoint(output_dir, args.agent)
+
     if not checkpoint_path or not os.path.exists(checkpoint_path):
         print(f"Error: Could not locate a valid checkpoint to resume training for {args.agent}.")
         sys.exit(1)
@@ -924,9 +864,7 @@ def handle_checkpoints(args: Any):
                 # Filter by agent if requested
                 if args.agent:
                     agent_folder = args.agent.lower()
-                    legacy_folder = args.agent.lower().replace("underlay_", "").replace("overlay_", "")
-                    legacy_agent_name = "CAMO_TD3" if args.agent == "UNDERLAY_TD3" else ("OVERLAY_CAMO_TD3" if args.agent == "OVERLAY_TD3" else args.agent)
-                    if (agent_folder not in root.lower()) and (legacy_folder not in root.lower()) and (args.agent not in file) and (legacy_agent_name not in file):
+                    if (agent_folder not in root.lower()) and (args.agent not in file):
                         continue
                         
                 filepath = os.path.join(root, file)
@@ -936,7 +874,7 @@ def handle_checkpoints(args: Any):
                 
                 # Check contents
                 try:
-                    checkpoint = torch.load(filepath, map_location="cpu")
+                    checkpoint = torch.load(filepath, map_location="cpu", weights_only=False)
                     algo = checkpoint.get("algorithm", "Unknown")
                     steps = checkpoint.get("total_it", 0)
                     

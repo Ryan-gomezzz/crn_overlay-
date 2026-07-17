@@ -319,7 +319,81 @@ class MATD3Agent:
             writer.add_scalar("train/lambda_nrg", self.lambda_nrg.item(), self.total_it)
 
     def save(self, filename: str) -> None:
-        pass  # Omitted for brevity
+        """Serialize the full agent state (networks, targets, optimizers,
+        Lagrangian multipliers, and training counters) to ``filename``."""
+        parent = os.path.dirname(os.path.abspath(filename))
+        os.makedirs(parent, exist_ok=True)
+
+        checkpoint = {
+            "algorithm": self.config.get("algorithm", {}).get("name", "MATD3"),
+            "config": self.config,
+            "total_it": self.total_it,
+            "eta_explore": self.eta_explore,
+            # Actors (decentralized SUs) + their targets
+            "actors": [a.state_dict() for a in self.actors],
+            "actor_targets": [a.state_dict() for a in self.actor_targets],
+            # Centralized relay actor + target
+            "relay_actor": self.relay_actor.state_dict(),
+            "relay_actor_target": self.relay_actor_target.state_dict(),
+            # Centralized critics + targets
+            "critic_thr": self.critic_thr.state_dict(),
+            "critic_thr_target": self.critic_thr_target.state_dict(),
+            "critic_qos": self.critic_qos.state_dict(),
+            "critic_qos_target": self.critic_qos_target.state_dict(),
+            "critic_nrg": self.critic_nrg.state_dict(),
+            "critic_nrg_target": self.critic_nrg_target.state_dict(),
+            # Optimizers
+            "actor_opts": [o.state_dict() for o in self.actor_opts],
+            "relay_opt": self.relay_opt.state_dict(),
+            "critic_thr_opt": self.critic_thr_opt.state_dict(),
+            "critic_qos_opt": self.critic_qos_opt.state_dict(),
+            "critic_nrg_opt": self.critic_nrg_opt.state_dict(),
+            # Lagrangian multipliers (log-space) + their optimizer
+            "alpha_qos": self.alpha_qos.detach().cpu(),
+            "alpha_nrg": self.alpha_nrg.detach().cpu(),
+            "lambda_optimizer": self.lambda_optimizer.state_dict(),
+        }
+        torch.save(checkpoint, filename)
 
     def load(self, filename: str) -> None:
-        pass  # Omitted for brevity
+        """Restore agent state previously written by :meth:`save`."""
+        checkpoint = torch.load(filename, map_location=self.device, weights_only=False)
+
+        for actor, sd in zip(self.actors, checkpoint["actors"]):
+            actor.load_state_dict(sd)
+        for actor, sd in zip(self.actor_targets, checkpoint["actor_targets"]):
+            actor.load_state_dict(sd)
+
+        self.relay_actor.load_state_dict(checkpoint["relay_actor"])
+        self.relay_actor_target.load_state_dict(checkpoint["relay_actor_target"])
+
+        self.critic_thr.load_state_dict(checkpoint["critic_thr"])
+        self.critic_thr_target.load_state_dict(checkpoint["critic_thr_target"])
+        self.critic_qos.load_state_dict(checkpoint["critic_qos"])
+        self.critic_qos_target.load_state_dict(checkpoint["critic_qos_target"])
+        self.critic_nrg.load_state_dict(checkpoint["critic_nrg"])
+        self.critic_nrg_target.load_state_dict(checkpoint["critic_nrg_target"])
+
+        for opt, sd in zip(self.actor_opts, checkpoint["actor_opts"]):
+            opt.load_state_dict(sd)
+        self.relay_opt.load_state_dict(checkpoint["relay_opt"])
+        self.critic_thr_opt.load_state_dict(checkpoint["critic_thr_opt"])
+        self.critic_qos_opt.load_state_dict(checkpoint["critic_qos_opt"])
+        self.critic_nrg_opt.load_state_dict(checkpoint["critic_nrg_opt"])
+
+        # Restore Lagrangian multipliers in place so the optimizer keeps
+        # tracking the same leaf tensors.
+        with torch.no_grad():
+            self.alpha_qos.copy_(checkpoint["alpha_qos"].to(self.device))
+            self.alpha_nrg.copy_(checkpoint["alpha_nrg"].to(self.device))
+        try:
+            self.lambda_optimizer.load_state_dict(checkpoint["lambda_optimizer"])
+        except (KeyError, ValueError):
+            pass
+
+        self.total_it = checkpoint.get("total_it", 0)
+        self.eta_explore = checkpoint.get("eta_explore", self.eta_explore)
+
+        # GRU weights need contiguous memory after a state_dict load.
+        for actor in list(self.actors) + list(self.actor_targets):
+            actor.gru.flatten_parameters()

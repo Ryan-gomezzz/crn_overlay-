@@ -143,9 +143,10 @@ class NOMAOverlaySimulator:
 
     Action space
     ------------
-    A vector of ``N+1`` values in [0, 1]:
-        [p_su_1, p_su_2, …, p_su_N, p_relay]
-    Each value is scaled by ``p_max_su`` (Watts) internally.
+    A vector of ``N+2`` values in [0, 1]:
+        [p_su_1, p_su_2, …, p_su_N, p_relay, alpha]
+    The ``N`` SU powers and the relay power are scaled by ``p_max_su``
+    (Watts) internally; ``alpha`` is the relay PU/SU power-splitting factor.
 
     Observation space (per agent *i*)
     ----------------------------------
@@ -283,9 +284,10 @@ class NOMAOverlaySimulator:
         """Advance one communication round (two time-slots).
 
         Args:
-            action: Shape ``(N+1,)`` array in [0, 1].
+            action: Shape ``(N+2,)`` array in [0, 1].
                 ``action[0:N]`` → normalised SU source powers.
                 ``action[N]``   → normalised relay power.
+                ``action[N+1]`` → relay PU/SU power-splitting factor alpha.
 
         Returns:
             Dictionary with keys:
@@ -482,8 +484,8 @@ class NOMAOverlaySimulator:
 
     @property
     def action_dim(self) -> int:
-        """Dimension of the joint action vector (N+1)."""
-        return self.cfg.num_su + 1
+        """Dimension of the joint action vector: N SU powers + relay power + alpha (N+2)."""
+        return self.cfg.num_su + 2
 
     @property
     def obs_dim(self) -> int:

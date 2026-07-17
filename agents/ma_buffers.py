@@ -17,7 +17,8 @@ class MAReplayBuffer:
         self.sequence_length = sequence_length
         self.device = device
         self.obs_dim = obs_dim
-        self.action_dim = num_agents + 1
+        # Joint action = N SU powers + relay power + alpha power-split factor.
+        self.action_dim = num_agents + 2
         
         # We will store episodes just like SequenceReplayBuffer
         self.episodes = []
@@ -27,7 +28,7 @@ class MAReplayBuffer:
     def add(
         self,
         obs: np.ndarray,      # (N, 8)
-        action: np.ndarray,   # (N+1,)
+        action: np.ndarray,   # (N+2,)
         reward: float,
         next_obs: np.ndarray, # (N, 8)
         done: bool,

@@ -23,10 +23,10 @@ class MultiAgentCRNEnv(gym.Env):
     """
     Multi-Agent Environment for NOMA Overlay CRN.
     
-    Action Space: Box(0, 1, shape=(N+1,)) 
-        - [p_su_1, ..., p_su_N, p_relay]
-        
-    Observation Space: Box(0, inf, shape=(N, 8))
+    Action Space: Box(0, 1, shape=(N+2,))
+        - [p_su_1, ..., p_su_N, p_relay, alpha]
+
+    Observation Space: Box(-inf, inf, shape=(N, 8))
         - N agents, each with 8 features
     """
     metadata = {"render_modes": ["human"]}

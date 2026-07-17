@@ -56,8 +56,9 @@ The system uses **Centralized Training with Decentralized Execution (CTDE)** via
     *   1 value: Normalized Transmit power for the shared Relay.
     *   1 value: Power splitting factor $\alpha$ used by the Relay.
 *   **Reward Function**: Maximize the sum-rate of the Secondary Users: $R_{SU} = \sum_{i=1}^N \frac{1}{2} \log_2(1 + \gamma_{e2e,i})$.
-*   **Constraints**: 
-    *   Lagrangian multipliers adaptively restrict actions to ensure the interference caused at the PR does not exceed the threshold ($I_{PR} \le I_{th}$).
+*   **Constraints**:
+    *   The interference caused at the PR is kept below the threshold ($I_{PR} \le I_{th}$) by a penalty term in the environment reward (`camo_td3.penalty_coef_inf`).
+    *   Adaptive **Lagrangian multipliers** (learned in log/softplus space) additionally enforce the Primary-User QoS-rate and per-agent energy constraints, shaping the actor objective via the dedicated QoS and energy critics.
 
 ---
 
@@ -113,7 +114,7 @@ Every physical and algorithmic aspect of the system is parameterized and highly 
 | `training.lr_actor` | `0.0003` | Learning rate for the Policy networks. |
 | `training.lr_critic` | `0.0003` | Learning rate for the Q-value networks. |
 | `training.buffer_size` | `100000` | Capacity of the episodic replay buffer. |
-| `training.total_steps` | `300000` | Total environment steps over training. |
+| `training.total_steps` | `100000` | Total environment steps over training (÷ `time_steps_per_episode` ⇒ 1000 episodes at the default 100 steps). |
 | `training.start_steps` | `1000` | Pure uniform random exploration steps before training. |
 
 ### Agent Multi-Objective & Constraints (camo_td3)
@@ -128,8 +129,8 @@ Every physical and algorithmic aspect of the system is parameterized and highly 
 | `camo_td3.penalty_coef_qos` | `10.0` | Scalar steepness of the PU QoS constraint boundary. |
 | `camo_td3.penalty_coef_nrg` | `1.0` | Scalar steepness of the Energy constraint boundary. |
 | `camo_td3.lr_lambda` | `0.001` | Learning rate for the adaptive Lagrangian multipliers. |
-| `camo_td3.lambda_inf_init` | `50.0` | Initial dual multiplier $\lambda$ for interference limit. |
-| `camo_td3.lambda_qos_init` | `50.0` | Initial dual multiplier $\lambda$ for PU QoS limit. |
+| `camo_td3.lambda_inf_init` | `1.0` | Initial dual multiplier $\lambda$ for interference limit. |
+| `camo_td3.lambda_qos_init` | `1.0` | Initial dual multiplier $\lambda$ for PU QoS limit. |
 | `camo_td3.lambda_nrg_init` | `0.001` | Initial dual multiplier $\lambda$ for Energy limit. |
 | `camo_td3.lambda_clamp_max` | `200.0` | Maximum absolute bound for dynamic Lagrangian multipliers. |
 | `camo_td3.eta_explore_init` | `0.05` | Initial exploration step size on the safety gradient manifold. |
@@ -142,5 +143,5 @@ Every physical and algorithmic aspect of the system is parameterized and highly 
 | `logging.log_interval` | `10` | Frequency of logging (in episodes). |
 | `logging.log_dir` | `experiments/runs/` | Destination directory for log files. |
 | `evaluation.eval_episodes` | `5` | Number of test episodes per evaluation. |
-| `evaluation.eval_interval` | `500` | Frequency of model evaluation during training (in episodes). |
+| `evaluation.eval_interval` | `500` | Frequency of model evaluation during training (in environment steps). |
 | `evaluation.save_dir` | `experiments/checkpoints/` | Destination directory for best model states. |
