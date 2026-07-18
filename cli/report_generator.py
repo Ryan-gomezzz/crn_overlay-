@@ -9,13 +9,23 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from typing import Dict, List, Any, Optional
 
+from simulator.utils import ber_bpsk_theory
+
 # Premium color palette for all agents
 COLORS = {
-    "MATD3": "#9467bd"         # Purple
+    "TD3": "#1f77b4",          # Blue
+    "UNDERLAY_TD3": "#ff7f0e", # Orange
+    "OVERLAY_TD3": "#2ca02c",  # Green
+    "MATD3": "#9467bd",        # Purple
+    "CENT_NOMA_TD3": "#d62728" # Red
 }
 
 SHORT_NAMES = {
-    "MATD3": "MATD3"
+    "TD3": "TD3",
+    "UNDERLAY_TD3": "Underlay TD3",
+    "OVERLAY_TD3": "Overlay TD3",
+    "MATD3": "MATD3",
+    "CENT_NOMA_TD3": "CENT_NOMA_TD3"
 }
 
 def load_metrics_for_agent(experiments_dir: str, agent: str) -> List[Dict[str, Any]]:
@@ -280,33 +290,43 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         pdf.savefig(fig)
         plt.close(fig)
 
-        # 4. Outage Probability
+        # 4. Outage Probability (log scale, like BER)
+        OUTAGE_FLOOR = 1e-4  # measured outage is often exactly 0; floor it for the log axis
         fig, ax = plt.subplots(figsize=(10, 6))
         for agent in active:
             ep, pu = _agent_series(metrics_by_agent[agent], "outage")
             if pu is not None:
-                ax.plot(ep, pu, color=COLORS[agent], linewidth=2, label=f'{SHORT_NAMES[agent]} — PU outage')
+                ax.plot(ep, np.maximum(pu, OUTAGE_FLOOR), color=COLORS[agent], linewidth=2,
+                        label=f'{SHORT_NAMES[agent]} — PU (PN) outage')
             ep_s, su = _agent_series(metrics_by_agent[agent], "su_outage")
             if su is not None:
-                ax.plot(ep_s, su, color=COLORS[agent], linewidth=1.5, linestyle='--', label=f'{SHORT_NAMES[agent]} — SU outage')
-        ax.set_ylim(-0.02, 1.0)
+                ax.plot(ep_s, np.maximum(su, OUTAGE_FLOOR), color=COLORS[agent], linewidth=1.5, linestyle='--',
+                        label=f'{SHORT_NAMES[agent]} — SU (SN) outage')
+        ax.set_yscale('log')
+        ax.set_ylim(OUTAGE_FLOOR * 0.5, 1.0)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Outage Probability')
-        ax.set_title('Primary and Secondary Outage Probability')
+        ax.set_title(f'Primary (PN) and Secondary (SN) Outage Probability\n(log scale; values at the {OUTAGE_FLOOR:g} floor indicate zero measured outage)')
+        ax.grid(True, which="both", ls="--", alpha=0.3)
         ax.legend(fontsize=9)
         pdf.savefig(fig)
         plt.close(fig)
 
-        # 5. Average Power
+        # 5. Average Power — Secondary (SU sources + relay) and Primary (PT)
         fig, ax = plt.subplots(figsize=(10, 6))
         for agent in active:
             ep, ap = _agent_series(metrics_by_agent[agent], "average_power")
             if ap is not None:
-                ax.plot(ep, smooth_curve(ap, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
+                ax.plot(ep, smooth_curve(ap, 0.9), color=COLORS[agent], linewidth=2,
+                        label=f'{SHORT_NAMES[agent]} — SN (SU + relay)')
+            ep_p, ap_p = _agent_series(metrics_by_agent[agent], "pu_average_power")
+            if ap_p is not None:
+                ax.plot(ep_p, ap_p, color=COLORS[agent], linewidth=1.5, linestyle='--',
+                        label=f'{SHORT_NAMES[agent]} — PN (PT, fixed)')
         ax.set_xlabel('Episode')
-        ax.set_ylabel('Average Power (W)')
-        ax.set_title('Average Power Consumption vs Episode')
-        ax.legend()
+        ax.set_ylabel('Average Transmit Power (W)')
+        ax.set_title('Average Transmit Power vs Episode\n(SN = learned SU-source + relay power; PN = fixed PT power)')
+        ax.legend(fontsize=9)
         pdf.savefig(fig)
         plt.close(fig)
 
@@ -327,7 +347,9 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         pdf.savefig(fig)
         plt.close(fig)
 
-        # 7. Individual SU Throughput
+        # 7. Individual SU Throughput — one distinct colour per user
+        USER_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+                       "#8c564b", "#e377c2", "#7f7f7f"]
         fig, ax = plt.subplots(figsize=(10, 6))
         plotted_individual = False
         for agent in active:
@@ -340,7 +362,9 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
                 if len(rates_arr.shape) == 2:
                     for i in range(rates_arr.shape[1]):
                         plotted_individual = True
-                        ax.plot(episodes, smooth_curve(rates_arr[:, i], 0.9), color=COLORS[agent], alpha=0.5, linewidth=1.5, label=f'{SHORT_NAMES[agent]} — SU {i+1}')
+                        ax.plot(episodes, smooth_curve(rates_arr[:, i], 0.9),
+                                color=USER_COLORS[i % len(USER_COLORS)], linewidth=1.8,
+                                label=f'SU {i+1}')
         ax.set_xlabel('Episode')
         ax.set_ylabel('Individual Rate (bits/s/Hz)')
         ax.set_title('Individual SU Throughput vs Episode (NOMA Fairness)')
@@ -350,31 +374,73 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
             pdf.savefig(fig)
         plt.close(fig)
 
-        # 8. SINR vs BER (SU & PU) - Scatter plot
+        # 8. BER vs SINR — Monte-Carlo points vs BPSK theory (SN and PN)
         fig, ax = plt.subplots(figsize=(10, 6))
+        all_sinr = []
         for agent in active:
             runs = metrics_by_agent[agent]
             if not runs: continue
             hist = runs[-1].get("history", {})
-            if "sinr_db_pts" in hist and "ber_pts" in hist and len(hist["sinr_db_pts"]) > 0:
-                ber_arr = np.maximum(np.array(hist["ber_pts"]), 1e-8)
-                ax.scatter(hist["sinr_db_pts"], ber_arr, color=COLORS[agent], alpha=0.5, s=10, label=f'{SHORT_NAMES[agent]} (SU)')
-            if "pu_sinr_db_pts" in hist and "pu_ber_pts" in hist and len(hist["pu_sinr_db_pts"]) > 0:
-                pu_ber_arr = np.maximum(np.array(hist["pu_ber_pts"]), 1e-8)
-                ax.scatter(hist["pu_sinr_db_pts"], pu_ber_arr, color=COLORS[agent], alpha=0.5, marker='x', s=10, label=f'{SHORT_NAMES[agent]} (PU)')
+            # Secondary network (SU)
+            if hist.get("sinr_db_pts") and hist.get("ber_mc_pts"):
+                x = np.array(hist["sinr_db_pts"], dtype=float)
+                y = np.array(hist["ber_mc_pts"], dtype=float)
+                y[y <= 0] = np.nan  # no errors observed -> below MC resolution, omit
+                all_sinr.append(x)
+                ax.scatter(x, y, color="#1f77b4", alpha=0.5, s=12, label='SN (SU) — Monte-Carlo')
+            # Primary network (PU)
+            if hist.get("pu_sinr_db_pts") and hist.get("pu_ber_mc_pts"):
+                x = np.array(hist["pu_sinr_db_pts"], dtype=float)
+                y = np.array(hist["pu_ber_mc_pts"], dtype=float)
+                y[y <= 0] = np.nan
+                all_sinr.append(x)
+                ax.scatter(x, y, color="#d62728", alpha=0.5, s=12, marker='x', label='PN (PU) — Monte-Carlo')
+        # BPSK theory reference line across the observed SINR range
+        if all_sinr:
+            concat = np.concatenate(all_sinr)
+            lo, hi = float(np.percentile(concat, 1)), float(np.percentile(concat, 99))
+            if hi <= lo:
+                lo, hi = concat.min() - 1, concat.max() + 1
+            sweep_db = np.linspace(lo, hi, 250)
+            gamma = 10.0 ** (sweep_db / 10.0)
+            ax.plot(sweep_db, np.maximum(ber_bpsk_theory(gamma), 1e-8),
+                    color="black", linewidth=1.5, label='BPSK theory')
+            ax.set_xlim(lo, hi)
         ax.set_yscale('log')
-        ax.set_ylim(bottom=1e-8, top=1.0)
-        ax.set_xlabel('SINR (dB)')
+        ax.set_ylim(1e-6, 1.0)
+        ax.set_xlabel('End-to-End SINR (dB)')
         ax.set_ylabel('Bit Error Rate (BER)')
-        ax.set_title('Theoretical BER vs SINR Scatter (with $10^{-8}$ Hardware Floor)')
-        ax.grid(True, which="both", ls="--")
-        
-        # Deduplicate legends for scatter plot
+        ax.set_title('BER vs SINR — Monte-Carlo (points) vs BPSK Theory (line)\nSN = secondary network, PN = primary network')
+        ax.grid(True, which="both", ls="--", alpha=0.3)
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         if by_label:
             ax.legend(by_label.values(), by_label.keys())
-            
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # 9. BER vs Episode — Secondary (SN) and Primary (PN)
+        BER_FLOOR = 1e-6
+        fig, ax = plt.subplots(figsize=(10, 6))
+        plotted = False
+        for agent in active:
+            ep, bs = _agent_series(metrics_by_agent[agent], "ber")
+            if bs is not None:
+                plotted = True
+                ax.plot(ep, np.maximum(bs, BER_FLOOR), color=COLORS[agent], linewidth=2,
+                        label=f'{SHORT_NAMES[agent]} — SN (SU) BER')
+            ep_p, bp = _agent_series(metrics_by_agent[agent], "pu_ber")
+            if bp is not None:
+                plotted = True
+                ax.plot(ep_p, np.maximum(bp, BER_FLOOR), color=COLORS[agent], linewidth=1.5, linestyle='--',
+                        label=f'{SHORT_NAMES[agent]} — PN (PU) BER')
+        ax.set_yscale('log')
+        ax.set_xlabel('Episode')
+        ax.set_ylabel('Bit Error Rate (BER)')
+        ax.set_title('Mean BER vs Episode\n(theoretical BPSK evaluated at the measured end-to-end SINR)')
+        ax.grid(True, which="both", ls="--", alpha=0.3)
+        if plotted:
+            ax.legend(fontsize=9)
         pdf.savefig(fig)
         plt.close(fig)
 

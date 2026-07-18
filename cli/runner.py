@@ -76,7 +76,9 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         "outage": [],
         "su_outage": [],
         "ber": [],
+        "ber_pu": [],
         "average_power": [],
+        "pu_average_power": [],
         "total_reward": [],
         "relay_success": [],
         "qos_satisfaction": [],
@@ -97,7 +99,9 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         ep_outage = []
         ep_su_outage = []
         ep_ber = []
+        ep_ber_pu = []
         ep_average_power = []
+        ep_pu_average_power = []
         ep_relay_success = []
         ep_qos_satisfaction = []
         ep_constraint_satisfaction = []
@@ -113,7 +117,9 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
             ep_outage.append(info.get("outage", 0))
             ep_su_outage.append(info.get("su_outage", 0))
             ep_ber.append(info.get("ber", 0))
+            ep_ber_pu.append(info.get("ber_pu", 0))
             ep_average_power.append(info.get("average_power", 0))
+            ep_pu_average_power.append(info.get("pu_average_power", 0))
 
             dec = info.get("relay_decoded", 0.0)
             ep_relay_success.append(dec)
@@ -145,7 +151,9 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         eval_metrics["outage"].append(np.mean(ep_outage))
         eval_metrics["su_outage"].append(np.mean(ep_su_outage))
         eval_metrics["ber"].append(np.mean(ep_ber))
+        eval_metrics["ber_pu"].append(np.mean(ep_ber_pu))
         eval_metrics["average_power"].append(np.mean(ep_average_power))
+        eval_metrics["pu_average_power"].append(np.mean(ep_pu_average_power))
         eval_metrics["relay_success"].append(np.mean(ep_relay_success))
         eval_metrics["qos_satisfaction"].append(np.mean(ep_qos_satisfaction))
         eval_metrics["constraint_satisfaction"].append(np.mean(ep_constraint_satisfaction))
@@ -295,8 +303,10 @@ def run_single_train(
     obs, info = env.reset()
     
     import math
-    from scipy.special import erfc
-    
+    from simulator.utils import ber_bpsk_theory, ber_bpsk_montecarlo
+    ber_rng = np.random.default_rng(seed)
+    BER_MC_BITS = 10000  # Monte-Carlo bits per sampled point (resolution floor ~1e-4)
+
     # Store evaluation metrics history
     history = {
         "episodes": [],
@@ -305,12 +315,17 @@ def run_single_train(
         "outage": [],
         "su_outage": [],
         "ber": [],
+        "pu_ber": [],
+        # BER-vs-SINR scatter points (theory + Monte-Carlo) for SU and PU
         "sinr_db_pts": [],
         "ber_pts": [],
+        "ber_mc_pts": [],
         "pu_sinr_db_pts": [],
         "pu_ber_pts": [],
+        "pu_ber_mc_pts": [],
         "pu_throughput": [],
         "average_power": [],
+        "pu_average_power": [],
         "relay_success": [],
         "qos_satisfaction": [],
         "constraint_satisfaction": [],
@@ -347,15 +362,18 @@ def run_single_train(
             ep_pu_throughput.append(pu_tput)
             
             if step in sample_steps:
+                # Theoretical (closed-form BPSK) and Monte-Carlo BER at the
+                # measured end-to-end SINRs, for both the SU and PU links.
                 sinr_s_db = 10.0 * math.log10(max(1e-9, sinr_su))
-                ber_s = float(0.5 * erfc(math.sqrt(max(0.0, sinr_su))))
                 sinr_p_db = 10.0 * math.log10(max(1e-9, sinr_pu))
-                ber_p = float(0.5 * erfc(math.sqrt(max(0.0, sinr_pu))))
-                
+
                 history["sinr_db_pts"].append(sinr_s_db)
-                history["ber_pts"].append(ber_s)
+                history["ber_pts"].append(float(ber_bpsk_theory(sinr_su)))
+                history["ber_mc_pts"].append(ber_bpsk_montecarlo(sinr_su, BER_MC_BITS, ber_rng))
+
                 history["pu_sinr_db_pts"].append(sinr_p_db)
-                history["pu_ber_pts"].append(ber_p)
+                history["pu_ber_pts"].append(float(ber_bpsk_theory(sinr_pu)))
+                history["pu_ber_mc_pts"].append(ber_bpsk_montecarlo(sinr_pu, BER_MC_BITS, ber_rng))
             
             # Store transition
             agent.replay_buffer.add(obs, action, reward, next_obs, done or truncated, info)
@@ -378,8 +396,10 @@ def run_single_train(
                 history["outage"].append(eval_metrics["outage"])
                 history["su_outage"].append(eval_metrics.get("su_outage", 0.0))
                 history["ber"].append(eval_metrics["ber"])
+                history["pu_ber"].append(eval_metrics.get("ber_pu", 0.0))
                 history["pu_throughput"].append(sum(ep_pu_throughput) / len(ep_pu_throughput) if ep_pu_throughput else 0.0)
                 history["average_power"].append(eval_metrics["average_power"])
+                history["pu_average_power"].append(eval_metrics.get("pu_average_power", 0.0))
                 history["relay_success"].append(eval_metrics["relay_success"])
                 history["qos_satisfaction"].append(eval_metrics["qos_satisfaction"])
                 history["constraint_satisfaction"].append(eval_metrics["constraint_satisfaction"])
@@ -480,7 +500,10 @@ def run_single_train(
         "eval_pu_outage": final_metrics["outage"],
         "eval_su_outage": final_metrics.get("su_outage", 0.0),
         "eval_average_power": final_metrics.get("average_power", 0.0),
+        "eval_pu_average_power": final_metrics.get("pu_average_power", 0.0),
         "eval_relay_success": final_metrics.get("relay_success", 0.0),
+        "eval_su_ber": final_metrics.get("ber", 0.0),
+        "eval_pu_ber": final_metrics.get("ber_pu", 0.0),
         "history": history
     }
     
@@ -637,11 +660,12 @@ def handle_evaluate(args: Any):
     print(f"             EVALUATION REPORT: {SHORT_NAMES_MAP.get(args.agent, args.agent)}")
     print("=" * 50)
     print(f"Average Reward:      {metrics['total_reward']:.2f}")
-    print(f"Average SU Rate:     {metrics['throughput_s']:.3f} bps/Hz")
-    print(f"Average PU Rate:     {metrics['throughput_p']:.3f} bps/Hz")
-    print(f"Average Outage Rate: {metrics['outage']:.4f}")
-    print(f"Average BER:         {metrics['ber']:.4f}")
-    print(f"Average Power:       {metrics['average_power']:.4f} W")
+    print(f"Average SU Rate:     {metrics['throughput_s']:.3f} bits/s/Hz")
+    print(f"Average PU Rate:     {metrics['throughput_p']:.3f} bits/s/Hz")
+    print(f"Average PU Outage:   {metrics['outage']:.4f}")
+    print(f"Average SU BER:      {metrics['ber']:.2e}")
+    print(f"Average PU BER:      {metrics.get('ber_pu', 0.0):.2e}")
+    print(f"Average SN Power:    {metrics['average_power']:.4f} W")
     print("=" * 50)
     print(f"Animation trace saved to: {trace_path}")
     print_footer()

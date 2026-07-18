@@ -137,8 +137,14 @@ class MultiAgentCRNEnv(gym.Env):
         info["primary_throughput"] = info["pu_rate"]
         info["sinr_su"] = float(np.mean(info["gamma_e2e"])) if "gamma_e2e" in info else 0.0
         info["average_power"] = (sum(info["p_su_watts"]) + info["p_relay_watts"]) / (self.num_agents + 1)
+        # Primary-network transmit power is fixed (PT at p_primary_dbm); expose it
+        # so reports can show average power for both the PN and the SN.
+        info["pu_average_power"] = float(self.simulator.cfg.p_pt)
         info["outage"] = 1.0 if info["constraint_violated"] else 0.0
         info["su_outage"] = 1.0 if info["sum_rate"] <= 0.0 else 0.0
+        # Bit-error rates (theoretical BPSK, computed in the simulator).
+        info["ber"] = float(info.get("ber_su", 0.0))     # secondary-network BER
+        info["ber_pu"] = float(info.get("ber_pu", 0.0))  # primary-network BER
         
         # Update histories
         self._obs_history = np.roll(self._obs_history, -1, axis=1)

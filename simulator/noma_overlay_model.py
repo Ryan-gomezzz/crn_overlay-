@@ -39,6 +39,7 @@ import numpy as np
 
 from simulator.channels import RayleighFading
 from simulator.propagation import calculate_path_loss
+from simulator.utils import ber_bpsk_theory
 
 
 # =====================================================================
@@ -363,6 +364,9 @@ class NOMAOverlaySimulator:
         rates = 0.5 * np.log2(1.0 + gamma_e2e)   # shape (N,)
         sum_rate = float(rates.sum())
 
+        # Per-user secondary BER (theoretical BPSK over the end-to-end SINR).
+        ber_su_per_user = ber_bpsk_theory(gamma_e2e)   # shape (N,)
+
         # ==============================================================
         # Interference constraint at PR
         # ==============================================================
@@ -393,6 +397,9 @@ class NOMAOverlaySimulator:
         # Selection Combining at PR
         sinr_pu = max(snr_pu_direct, snr_pu_relayed)
         pu_rate = 0.5 * math.log2(1.0 + sinr_pu)
+
+        # Primary BER (theoretical BPSK over the primary end-to-end SINR).
+        ber_pu = float(ber_bpsk_theory(sinr_pu))
 
         # ==============================================================
         # Reward
@@ -427,6 +434,10 @@ class NOMAOverlaySimulator:
             "sinr_pu": float(sinr_pu),
             "snr_pu_direct": float(snr_pu_direct),
             "snr_pu_relayed": float(snr_pu_relayed),
+            "ber_su_per_user": ber_su_per_user.tolist(),
+            "ber_su": float(np.mean(ber_su_per_user)),
+            "ber_pu": ber_pu,
+            "sinr_su_mean": float(np.mean(gamma_e2e)),
             "p_su_watts": p_su.tolist(),
             "p_relay_watts": float(p_relay),
             "alpha": float(alpha),
