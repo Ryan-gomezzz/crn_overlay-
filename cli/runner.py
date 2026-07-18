@@ -77,6 +77,8 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         "su_outage": [],
         "ber": [],
         "ber_pu": [],
+        "ber_hop1": [],
+        "ber_pu_hop1": [],
         "average_power": [],
         "pu_average_power": [],
         "total_reward": [],
@@ -100,6 +102,8 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         ep_su_outage = []
         ep_ber = []
         ep_ber_pu = []
+        ep_ber_hop1 = []
+        ep_ber_pu_hop1 = []
         ep_average_power = []
         ep_pu_average_power = []
         ep_relay_success = []
@@ -118,6 +122,8 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
             ep_su_outage.append(info.get("su_outage", 0))
             ep_ber.append(info.get("ber", 0))
             ep_ber_pu.append(info.get("ber_pu", 0))
+            ep_ber_hop1.append(info.get("ber_hop1", 0))
+            ep_ber_pu_hop1.append(info.get("ber_pu_hop1", 0))
             ep_average_power.append(info.get("average_power", 0))
             ep_pu_average_power.append(info.get("pu_average_power", 0))
 
@@ -152,6 +158,8 @@ def evaluate_policy(agent, env, episodes: int = 5, dump_trace_path: str = None) 
         eval_metrics["su_outage"].append(np.mean(ep_su_outage))
         eval_metrics["ber"].append(np.mean(ep_ber))
         eval_metrics["ber_pu"].append(np.mean(ep_ber_pu))
+        eval_metrics["ber_hop1"].append(np.mean(ep_ber_hop1))
+        eval_metrics["ber_pu_hop1"].append(np.mean(ep_ber_pu_hop1))
         eval_metrics["average_power"].append(np.mean(ep_average_power))
         eval_metrics["pu_average_power"].append(np.mean(ep_pu_average_power))
         eval_metrics["relay_success"].append(np.mean(ep_relay_success))
@@ -303,7 +311,9 @@ def run_single_train(
     obs, info = env.reset()
     
     import math
-    from simulator.utils import ber_bpsk_theory, ber_bpsk_montecarlo
+    from simulator.utils import (
+        ber_bpsk_theory, ber_bpsk_montecarlo, df_ber_theory, simulate_df_ber_montecarlo,
+    )
     ber_rng = np.random.default_rng(seed)
     BER_MC_BITS = 10000  # Monte-Carlo bits per sampled point (resolution floor ~1e-4)
 
@@ -314,12 +324,17 @@ def run_single_train(
         "throughput_s": [],
         "outage": [],
         "su_outage": [],
-        "ber": [],
-        "pu_ber": [],
-        # BER-vs-SINR scatter points (theory + Monte-Carlo) for SU and PU
-        "sinr_db_pts": [],
-        "ber_pts": [],
-        "ber_mc_pts": [],
+        "ber": [],            # SN end-to-end BER (destination)
+        "pu_ber": [],         # PN end-to-end BER
+        "ber_hop1": [],       # SN relay (hop-1) BER
+        "pu_ber_hop1": [],    # PN relay (hop-1) BER
+        # BER-vs-SINR scatter points (theory + Monte-Carlo), per hop and e2e
+        "sinr_db_pts": [],        # SU end-to-end effective SINR = min(hop1,hop2)
+        "ber_pts": [],            # SU e2e DF theory
+        "ber_mc_pts": [],         # SU e2e DF Monte-Carlo
+        "sinr_hop1_db_pts": [],   # SU hop-1 SINR
+        "ber_hop1_pts": [],       # SU hop-1 theory
+        "ber_hop1_mc_pts": [],    # SU hop-1 Monte-Carlo
         "pu_sinr_db_pts": [],
         "pu_ber_pts": [],
         "pu_ber_mc_pts": [],
@@ -362,18 +377,32 @@ def run_single_train(
             ep_pu_throughput.append(pu_tput)
             
             if step in sample_steps:
-                # Theoretical (closed-form BPSK) and Monte-Carlo BER at the
-                # measured end-to-end SINRs, for both the SU and PU links.
-                sinr_s_db = 10.0 * math.log10(max(1e-9, sinr_su))
-                sinr_p_db = 10.0 * math.log10(max(1e-9, sinr_pu))
+                # Two-hop DF bit-level BER (theory + Monte-Carlo), per hop and e2e.
+                # SU: hop-1 = SU->relay (mean gamma_sr), hop-2 = relay->dest (gamma_rd).
+                g1 = next_info.get("sinr_su_hop1_mean", sinr_su)
+                g2 = next_info.get("sinr_su_hop2", sinr_su)
+                th_hop1, th_e2e = df_ber_theory(g1, g2)
+                mc_hop1, mc_e2e = simulate_df_ber_montecarlo(g1, g2, BER_MC_BITS, ber_rng)
 
-                history["sinr_db_pts"].append(sinr_s_db)
-                history["ber_pts"].append(float(ber_bpsk_theory(sinr_su)))
-                history["ber_mc_pts"].append(ber_bpsk_montecarlo(sinr_su, BER_MC_BITS, ber_rng))
+                history["sinr_hop1_db_pts"].append(10.0 * math.log10(max(1e-9, g1)))
+                history["ber_hop1_pts"].append(th_hop1)
+                history["ber_hop1_mc_pts"].append(mc_hop1)
 
-                history["pu_sinr_db_pts"].append(sinr_p_db)
-                history["pu_ber_pts"].append(float(ber_bpsk_theory(sinr_pu)))
-                history["pu_ber_mc_pts"].append(ber_bpsk_montecarlo(sinr_pu, BER_MC_BITS, ber_rng))
+                history["sinr_db_pts"].append(10.0 * math.log10(max(1e-9, min(g1, g2))))
+                history["ber_pts"].append(th_e2e)
+                history["ber_mc_pts"].append(mc_e2e)
+
+                # PU: selection-combine the direct link with the DF-relayed link.
+                snr_direct = next_info.get("snr_pu_direct", sinr_pu)
+                g_pu1 = next_info.get("gamma_relay_pu", sinr_pu)
+                g_pu2 = next_info.get("snr_pu_relayed_hop2", sinr_pu)
+                if snr_direct >= min(g_pu1, g_pu2):
+                    pu_mc = ber_bpsk_montecarlo(snr_direct, BER_MC_BITS, ber_rng)
+                else:
+                    _, pu_mc = simulate_df_ber_montecarlo(g_pu1, g_pu2, BER_MC_BITS, ber_rng)
+                history["pu_sinr_db_pts"].append(10.0 * math.log10(max(1e-9, sinr_pu)))
+                history["pu_ber_pts"].append(float(next_info.get("ber_pu", ber_bpsk_theory(sinr_pu))))
+                history["pu_ber_mc_pts"].append(pu_mc)
             
             # Store transition
             agent.replay_buffer.add(obs, action, reward, next_obs, done or truncated, info)
@@ -397,6 +426,8 @@ def run_single_train(
                 history["su_outage"].append(eval_metrics.get("su_outage", 0.0))
                 history["ber"].append(eval_metrics["ber"])
                 history["pu_ber"].append(eval_metrics.get("ber_pu", 0.0))
+                history["ber_hop1"].append(eval_metrics.get("ber_hop1", 0.0))
+                history["pu_ber_hop1"].append(eval_metrics.get("ber_pu_hop1", 0.0))
                 history["pu_throughput"].append(sum(ep_pu_throughput) / len(ep_pu_throughput) if ep_pu_throughput else 0.0)
                 history["average_power"].append(eval_metrics["average_power"])
                 history["pu_average_power"].append(eval_metrics.get("pu_average_power", 0.0))
@@ -504,6 +535,8 @@ def run_single_train(
         "eval_relay_success": final_metrics.get("relay_success", 0.0),
         "eval_su_ber": final_metrics.get("ber", 0.0),
         "eval_pu_ber": final_metrics.get("ber_pu", 0.0),
+        "eval_su_ber_hop1": final_metrics.get("ber_hop1", 0.0),
+        "eval_pu_ber_hop1": final_metrics.get("ber_pu_hop1", 0.0),
         "history": history
     }
     
@@ -663,8 +696,8 @@ def handle_evaluate(args: Any):
     print(f"Average SU Rate:     {metrics['throughput_s']:.3f} bits/s/Hz")
     print(f"Average PU Rate:     {metrics['throughput_p']:.3f} bits/s/Hz")
     print(f"Average PU Outage:   {metrics['outage']:.4f}")
-    print(f"Average SU BER:      {metrics['ber']:.2e}")
-    print(f"Average PU BER:      {metrics.get('ber_pu', 0.0):.2e}")
+    print(f"SU BER  (relay/e2e): {metrics.get('ber_hop1', 0.0):.2e} / {metrics['ber']:.2e}")
+    print(f"PU BER  (relay/e2e): {metrics.get('ber_pu_hop1', 0.0):.2e} / {metrics.get('ber_pu', 0.0):.2e}")
     print(f"Average SN Power:    {metrics['average_power']:.4f} W")
     print("=" * 50)
     print(f"Animation trace saved to: {trace_path}")

@@ -374,43 +374,47 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
             pdf.savefig(fig)
         plt.close(fig)
 
-        # 8. BER vs SINR — Monte-Carlo points vs BPSK theory (SN and PN)
+        # 8. BER vs SINR — per-hop DF bit-level decoding (Monte-Carlo vs theory)
+        #    SU hop-1 (relay decode) points lie on the single-hop BPSK line;
+        #    SU end-to-end points lie ABOVE it (DF error-propagation penalty).
         fig, ax = plt.subplots(figsize=(10, 6))
         all_sinr = []
+
+        def _scatter(x_key, y_key, hist, color, marker, label):
+            xs, ys = hist.get(x_key), hist.get(y_key)
+            if not xs or not ys:
+                return
+            x = np.array(xs, dtype=float)
+            y = np.array(ys, dtype=float)
+            y[y <= 0] = np.nan  # no errors observed -> below MC resolution, omit
+            all_sinr.append(x)
+            ax.scatter(x, y, color=color, alpha=0.45, s=12, marker=marker, label=label)
+
         for agent in active:
             runs = metrics_by_agent[agent]
             if not runs: continue
             hist = runs[-1].get("history", {})
-            # Secondary network (SU)
-            if hist.get("sinr_db_pts") and hist.get("ber_mc_pts"):
-                x = np.array(hist["sinr_db_pts"], dtype=float)
-                y = np.array(hist["ber_mc_pts"], dtype=float)
-                y[y <= 0] = np.nan  # no errors observed -> below MC resolution, omit
-                all_sinr.append(x)
-                ax.scatter(x, y, color="#1f77b4", alpha=0.5, s=12, label='SN (SU) — Monte-Carlo')
-            # Primary network (PU)
-            if hist.get("pu_sinr_db_pts") and hist.get("pu_ber_mc_pts"):
-                x = np.array(hist["pu_sinr_db_pts"], dtype=float)
-                y = np.array(hist["pu_ber_mc_pts"], dtype=float)
-                y[y <= 0] = np.nan
-                all_sinr.append(x)
-                ax.scatter(x, y, color="#d62728", alpha=0.5, s=12, marker='x', label='PN (PU) — Monte-Carlo')
-        # BPSK theory reference line across the observed SINR range
+            _scatter("sinr_hop1_db_pts", "ber_hop1_mc_pts", hist, "#2ca02c", "o", 'SN (SU) — hop-1 (relay) MC')
+            _scatter("sinr_db_pts", "ber_mc_pts", hist, "#1f77b4", "s", 'SN (SU) — end-to-end MC')
+            _scatter("pu_sinr_db_pts", "pu_ber_mc_pts", hist, "#d62728", "x", 'PN (PU) — end-to-end MC')
+
+        # Single-hop BPSK theory reference line across the observed SINR range
         if all_sinr:
             concat = np.concatenate(all_sinr)
             lo, hi = float(np.percentile(concat, 1)), float(np.percentile(concat, 99))
             if hi <= lo:
-                lo, hi = concat.min() - 1, concat.max() + 1
+                lo, hi = float(concat.min()) - 1.0, float(concat.max()) + 1.0
             sweep_db = np.linspace(lo, hi, 250)
             gamma = 10.0 ** (sweep_db / 10.0)
             ax.plot(sweep_db, np.maximum(ber_bpsk_theory(gamma), 1e-8),
-                    color="black", linewidth=1.5, label='BPSK theory')
+                    color="black", linewidth=1.5, label='single-hop BPSK theory')
             ax.set_xlim(lo, hi)
         ax.set_yscale('log')
         ax.set_ylim(1e-6, 1.0)
-        ax.set_xlabel('End-to-End SINR (dB)')
+        ax.set_xlabel('SINR (dB)  [hop-1: γ_sr,  end-to-end: min(γ_sr, γ_rd)]')
         ax.set_ylabel('Bit Error Rate (BER)')
-        ax.set_title('BER vs SINR — Monte-Carlo (points) vs BPSK Theory (line)\nSN = secondary network, PN = primary network')
+        ax.set_title('Per-Hop DF BER vs SINR — Monte-Carlo (points) vs BPSK Theory (line)\n'
+                     'hop-1 = relay decode; end-to-end = destination (SN = secondary, PN = primary)')
         ax.grid(True, which="both", ls="--", alpha=0.3)
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
@@ -419,7 +423,7 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         pdf.savefig(fig)
         plt.close(fig)
 
-        # 9. BER vs Episode — Secondary (SN) and Primary (PN)
+        # 9. BER vs Episode — per-hop (relay) and end-to-end, for SN and PN
         BER_FLOOR = 1e-6
         fig, ax = plt.subplots(figsize=(10, 6))
         plotted = False
@@ -427,17 +431,22 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
             ep, bs = _agent_series(metrics_by_agent[agent], "ber")
             if bs is not None:
                 plotted = True
-                ax.plot(ep, np.maximum(bs, BER_FLOOR), color=COLORS[agent], linewidth=2,
-                        label=f'{SHORT_NAMES[agent]} — SN (SU) BER')
+                ax.plot(ep, np.maximum(bs, BER_FLOOR), color="#1f77b4", linewidth=2,
+                        label='SN (SU) — end-to-end')
+            ep_h, bh = _agent_series(metrics_by_agent[agent], "ber_hop1")
+            if bh is not None:
+                plotted = True
+                ax.plot(ep_h, np.maximum(bh, BER_FLOOR), color="#2ca02c", linewidth=1.5, linestyle=':',
+                        label='SN (SU) — hop-1 (relay)')
             ep_p, bp = _agent_series(metrics_by_agent[agent], "pu_ber")
             if bp is not None:
                 plotted = True
-                ax.plot(ep_p, np.maximum(bp, BER_FLOOR), color=COLORS[agent], linewidth=1.5, linestyle='--',
-                        label=f'{SHORT_NAMES[agent]} — PN (PU) BER')
+                ax.plot(ep_p, np.maximum(bp, BER_FLOOR), color="#d62728", linewidth=1.5, linestyle='--',
+                        label='PN (PU) — end-to-end')
         ax.set_yscale('log')
         ax.set_xlabel('Episode')
         ax.set_ylabel('Bit Error Rate (BER)')
-        ax.set_title('Mean BER vs Episode\n(theoretical BPSK evaluated at the measured end-to-end SINR)')
+        ax.set_title('Mean BER vs Episode — per-hop DF decoding\n(hop-1 = relay decode, end-to-end = destination after DF forwarding)')
         ax.grid(True, which="both", ls="--", alpha=0.3)
         if plotted:
             ax.legend(fontsize=9)

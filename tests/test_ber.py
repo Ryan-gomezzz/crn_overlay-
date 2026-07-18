@@ -2,7 +2,12 @@
 
 import numpy as np
 
-from simulator.utils import ber_bpsk_montecarlo, ber_bpsk_theory
+from simulator.utils import (
+    ber_bpsk_montecarlo,
+    ber_bpsk_theory,
+    df_ber_theory,
+    simulate_df_ber_montecarlo,
+)
 
 
 def test_theory_known_points():
@@ -33,3 +38,32 @@ def test_montecarlo_negative_gamma_is_floored():
     # Negative SINR is treated as 0 SNR -> BER ~ 0.5, never crashes.
     mc = ber_bpsk_montecarlo(-5.0, n_bits=5000, rng=np.random.default_rng(1))
     assert 0.4 < mc <= 0.6
+
+
+def test_df_theory_formula_and_ordering():
+    g1, g2 = 10 ** (6 / 10), 10 ** (8 / 10)
+    p1 = float(ber_bpsk_theory(g1))
+    p2 = float(ber_bpsk_theory(g2))
+    hop1, e2e = df_ber_theory(g1, g2)
+    assert np.isclose(hop1, p1)
+    assert np.isclose(e2e, p1 + p2 - 2 * p1 * p2)
+    # DF end-to-end BER is never better than either individual hop.
+    assert e2e >= p1 - 1e-12 and e2e >= p2 - 1e-12
+
+
+def test_df_montecarlo_matches_df_theory():
+    rng = np.random.default_rng(0)
+    for g1_db, g2_db in [(3, 10), (6, 6), (10, 3)]:
+        g1, g2 = 10 ** (g1_db / 10), 10 ** (g2_db / 10)
+        th_hop1, th_e2e = df_ber_theory(g1, g2)
+        mc_hop1, mc_e2e = simulate_df_ber_montecarlo(g1, g2, n_bits=300000, rng=rng)
+        assert abs(mc_hop1 - th_hop1) < 0.01
+        assert abs(mc_e2e - th_e2e) < 0.01
+
+
+def test_df_e2e_exceeds_single_hop_mapping():
+    # Two equal hops: end-to-end BER should be ~2x a single-hop mapping.
+    g = 10 ** (7 / 10)
+    single = float(ber_bpsk_theory(g))
+    _, e2e = df_ber_theory(g, g)
+    assert e2e > single

@@ -39,7 +39,7 @@ import numpy as np
 
 from simulator.channels import RayleighFading
 from simulator.propagation import calculate_path_loss
-from simulator.utils import ber_bpsk_theory
+from simulator.utils import ber_bpsk_theory, df_ber_theory
 
 
 # =====================================================================
@@ -364,8 +364,16 @@ class NOMAOverlaySimulator:
         rates = 0.5 * np.log2(1.0 + gamma_e2e)   # shape (N,)
         sum_rate = float(rates.sum())
 
-        # Per-user secondary BER (theoretical BPSK over the end-to-end SINR).
-        ber_su_per_user = ber_bpsk_theory(gamma_e2e)   # shape (N,)
+        # Per-user secondary BER via two-hop Decode-and-Forward decoding:
+        #   hop 1 = SU source -> relay  (per-user SINR gamma_sr, incl. NOMA/SIC residual)
+        #   hop 2 = relay -> destination (common SINR gamma_sud_su)
+        # The relay decodes and re-forwards, so an end-to-end bit errs iff it is
+        # flipped on an odd number of hops:  P_e2e = P1 + P2 - 2*P1*P2.
+        ber_su_hop1_per_user = ber_bpsk_theory(gamma_sr)          # relay decode (hop 1)
+        p2_su = float(ber_bpsk_theory(gamma_sud_su))              # hop 2 (shared)
+        ber_su_e2e_per_user = (
+            ber_su_hop1_per_user + p2_su - 2.0 * ber_su_hop1_per_user * p2_su
+        )
 
         # ==============================================================
         # Interference constraint at PR
@@ -398,8 +406,13 @@ class NOMAOverlaySimulator:
         sinr_pu = max(snr_pu_direct, snr_pu_relayed)
         pu_rate = 0.5 * math.log2(1.0 + sinr_pu)
 
-        # Primary BER (theoretical BPSK over the primary end-to-end SINR).
-        ber_pu = float(ber_bpsk_theory(sinr_pu))
+        # Primary BER: the PR selection-combines a single-hop direct link with a
+        # two-hop DF-relayed link, i.e. it takes whichever path yields the lower
+        # BER.  ber_pu_hop1 is the relay's decode of the PU (hop 1 of the relayed path).
+        ber_pu_direct = float(ber_bpsk_theory(snr_pu_direct))
+        ber_pu_hop1 = float(ber_bpsk_theory(gamma_relay_pu))
+        _, ber_pu_relayed = df_ber_theory(gamma_relay_pu, snr_pu_relayed_hop2)
+        ber_pu = min(ber_pu_direct, ber_pu_relayed)
 
         # ==============================================================
         # Reward
@@ -434,9 +447,19 @@ class NOMAOverlaySimulator:
             "sinr_pu": float(sinr_pu),
             "snr_pu_direct": float(snr_pu_direct),
             "snr_pu_relayed": float(snr_pu_relayed),
-            "ber_su_per_user": ber_su_per_user.tolist(),
-            "ber_su": float(np.mean(ber_su_per_user)),
+            "gamma_relay_pu": float(gamma_relay_pu),
+            "snr_pu_relayed_hop2": float(snr_pu_relayed_hop2),
+            # --- Bit-error rates (two-hop Decode-and-Forward, per hop + e2e) ---
+            "ber_su_hop1_per_user": ber_su_hop1_per_user.tolist(),  # relay decode
+            "ber_su_hop1": float(np.mean(ber_su_hop1_per_user)),
+            "ber_su_per_user": ber_su_e2e_per_user.tolist(),        # end-to-end
+            "ber_su": float(np.mean(ber_su_e2e_per_user)),
+            "ber_pu_hop1": ber_pu_hop1,
             "ber_pu": ber_pu,
+            "ber_pu_direct": ber_pu_direct,
+            "ber_pu_relayed": float(ber_pu_relayed),
+            "sinr_su_hop1_mean": float(np.mean(gamma_sr)),
+            "sinr_su_hop2": float(gamma_sud_su),
             "sinr_su_mean": float(np.mean(gamma_e2e)),
             "p_su_watts": p_su.tolist(),
             "p_relay_watts": float(p_relay),

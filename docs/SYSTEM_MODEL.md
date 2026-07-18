@@ -62,6 +62,43 @@ The system uses **Centralized Training with Decentralized Execution (CTDE)** via
 
 ---
 
+## 4a. Bit Error Rate (Per-Hop Decode-and-Forward)
+
+BER is evaluated with **per-hop bit-level decoding** rather than a single
+end-to-end SINR mapping, so that Decode-and-Forward error propagation is
+captured explicitly.
+
+For each secondary user *i*, BPSK is decoded **twice**:
+
+1.  **Hop 1 (SU → relay).** Source bits are detected at the relay under the
+    post-SIC per-user SINR $\gamma_{sr,i}$ (which already carries the NOMA
+    residual interference from weaker, not-yet-cancelled users). This yields the
+    relay decision — the **hop-1 / relay BER**, $P_{1,i}$.
+2.  **DF forwarding.** The relay re-encodes and forwards its (possibly
+    erroneous) decisions.
+3.  **Hop 2 (relay → destination).** The forwarded bits are detected at the
+    destination under $\gamma_{rd}$, giving error probability $P_2$.
+
+A bit is in error end-to-end iff it is flipped an odd number of times, so the
+**end-to-end BER** is
+
+$$P_{e2e,i} = P_{1,i} + P_2 - 2\,P_{1,i}\,P_2 \;\ge\; \max(P_{1,i}, P_2),$$
+
+with per-link BPSK BER $P = \tfrac12\,\mathrm{erfc}(\sqrt{\gamma})$. The primary
+user is decoded via **selection combining** of its single-hop direct link
+(PT → PR) and its DF-relayed link, taking whichever path yields the lower BER.
+
+Both the closed-form values above and a **bit-level Monte-Carlo** simulation
+(random bits transmitted, decoded at the relay, re-encoded, decoded at the
+destination, then compared to the source) are recorded. Reports plot the
+Monte-Carlo points against the single-hop BPSK theory line: hop-1 points fall on
+the line, while end-to-end points lie above it — the DF error-propagation
+penalty. Implementations: `simulator/utils.py` (`ber_bpsk_theory`,
+`ber_bpsk_montecarlo`, `df_ber_theory`, `simulate_df_ber_montecarlo`) and the
+per-step values exposed by `simulator/noma_overlay_model.py`.
+
+---
+
 ## 5. Configuration Parameters (`configs/config.yaml`)
 
 Every physical and algorithmic aspect of the system is parameterized and highly configurable. 

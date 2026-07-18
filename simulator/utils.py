@@ -60,6 +60,72 @@ def ber_bpsk_montecarlo(
     return float(np.mean(decoded != bits))
 
 
+def df_ber_theory(gamma_hop1, gamma_hop2):
+    """Theoretical per-hop and end-to-end BER of a Decode-and-Forward link.
+
+    The relay decodes hop 1 (error prob ``P1``) and forwards its decision;
+    the destination decodes hop 2 (error prob ``P2``). An end-to-end bit is in
+    error iff it was flipped an odd number of times, so::
+
+        P_e2e = P1 + P2 - 2*P1*P2
+
+    which is always ``>= max(P1, P2)`` — the DF error-propagation penalty that a
+    single ``min(SINR)`` mapping cannot capture.
+
+    Args:
+        gamma_hop1: Linear SINR of hop 1 (source → relay).
+        gamma_hop2: Linear SINR of hop 2 (relay → destination).
+
+    Returns:
+        Tuple ``(ber_hop1, ber_e2e)``.
+    """
+    p1 = float(ber_bpsk_theory(gamma_hop1))
+    p2 = float(ber_bpsk_theory(gamma_hop2))
+    return p1, p1 + p2 - 2.0 * p1 * p2
+
+
+def simulate_df_ber_montecarlo(
+    gamma_hop1,
+    gamma_hop2,
+    n_bits: int = 20000,
+    rng: np.random.Generator | None = None,
+):
+    """Bit-level Monte-Carlo BER of a two-hop Decode-and-Forward link.
+
+    Random source bits are BPSK-modulated and **decoded at the relay** (hop 1),
+    the relay's (possibly erroneous) decisions are **re-encoded and forwarded**,
+    then **decoded at the destination** (hop 2). Errors are counted per hop and
+    end-to-end against the original source bits, so DF error propagation is
+    captured exactly (converges to :func:`df_ber_theory`).
+
+    Args:
+        gamma_hop1: Linear SINR of hop 1 (source → relay).
+        gamma_hop2: Linear SINR of hop 2 (relay → destination).
+        n_bits: Number of transmitted bits.
+        rng: Optional numpy Generator for reproducibility.
+
+    Returns:
+        Tuple ``(ber_hop1, ber_e2e)`` of empirical BERs in ``[0, 1]``.
+    """
+    rng = rng or np.random.default_rng()
+    g1 = max(float(gamma_hop1), 0.0)
+    g2 = max(float(gamma_hop2), 0.0)
+
+    source = rng.integers(0, 2, size=n_bits)
+
+    # Hop 1: source -> relay (coherent BPSK detection at SINR g1)
+    rx1 = math.sqrt(2.0 * g1) * (2 * source - 1) + rng.standard_normal(n_bits)
+    relay = (rx1 > 0).astype(int)
+
+    # Hop 2: relay re-encodes its decisions -> destination (SINR g2)
+    rx2 = math.sqrt(2.0 * g2) * (2 * relay - 1) + rng.standard_normal(n_bits)
+    dest = (rx2 > 0).astype(int)
+
+    ber_hop1 = float(np.mean(relay != source))
+    ber_e2e = float(np.mean(dest != source))
+    return ber_hop1, ber_e2e
+
+
 def dbm_to_watt(dbm: float) -> float:
     """Convert power from dBm to Watts.
 

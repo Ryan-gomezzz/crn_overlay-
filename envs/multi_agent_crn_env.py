@@ -142,9 +142,11 @@ class MultiAgentCRNEnv(gym.Env):
         info["pu_average_power"] = float(self.simulator.cfg.p_pt)
         info["outage"] = 1.0 if info["constraint_violated"] else 0.0
         info["su_outage"] = 1.0 if info["sum_rate"] <= 0.0 else 0.0
-        # Bit-error rates (theoretical BPSK, computed in the simulator).
-        info["ber"] = float(info.get("ber_su", 0.0))     # secondary-network BER
-        info["ber_pu"] = float(info.get("ber_pu", 0.0))  # primary-network BER
+        # Bit-error rates (two-hop Decode-and-Forward, computed in the simulator).
+        info["ber"] = float(info.get("ber_su", 0.0))            # SN end-to-end BER
+        info["ber_pu"] = float(info.get("ber_pu", 0.0))         # PN end-to-end BER
+        info["ber_hop1"] = float(info.get("ber_su_hop1", 0.0))  # SN relay (hop-1) BER
+        info["ber_pu_hop1"] = float(info.get("ber_pu_hop1", 0.0))  # PN relay (hop-1) BER
         
         # Update histories
         self._obs_history = np.roll(self._obs_history, -1, axis=1)
