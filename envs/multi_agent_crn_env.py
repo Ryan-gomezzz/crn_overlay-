@@ -173,6 +173,15 @@ class MultiAgentCRNEnv(gym.Env):
         
         return obs, reward, res["terminated"], res["truncated"], info
 
+    def simulate_waveform_ber(self, n_bits: int = 4000, rng=None):
+        """Waveform-level (imperfect-SIC) DF-NOMA BER for the last env.step().
+
+        Returns ``None`` before the first step. See
+        :meth:`simulator.noma_overlay_model.NOMAOverlaySimulator.simulate_waveform_ber`.
+        """
+        return self.simulator.simulate_waveform_ber(n_bits=n_bits, rng=rng)
+
+
 def make_ma_crn_env(config_path: Optional[str] = None, render_mode: Optional[str] = None) -> MultiAgentCRNEnv:
     config = {}
     if config_path and os.path.isfile(config_path):

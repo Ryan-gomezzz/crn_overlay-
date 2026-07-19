@@ -97,6 +97,37 @@ penalty. Implementations: `simulator/utils.py` (`ber_bpsk_theory`,
 `ber_bpsk_montecarlo`, `df_ber_theory`, `simulate_df_ber_montecarlo`) and the
 per-step values exposed by `simulator/noma_overlay_model.py`.
 
+### Waveform-level BER with imperfect SIC
+
+The per-hop model above assumes the SINRs already reflect *perfect* SIC. A
+higher-fidelity **waveform Monte-Carlo** (`simulator/ber_waveform.py`,
+`simulate_waveform_df_noma_ber`) removes that assumption. It forms the actual
+complex-baseband superposed signals from the true complex channels
+$h = g\sqrt{PL}$ and runs **real SIC**, subtracting the *detected* symbols:
+
+- **Hop 1 (relay).** $y_r = \sqrt{P_p}h_{pr}x_p + \sum_i \sqrt{P_{s,i}}h_{sr,i}x_{s,i} + n_r$.
+  The relay detects and cancels the PU, then the SUs in descending
+  $|h_{sr,i}|^2$ order. A wrong decision is cancelled with the wrong symbol, so
+  its residual leaks into later users — producing the characteristic **NOMA/SIC
+  error floor**.
+- **Hop 2 (destination).** Hop 2 is a per-user bottleneck, not an N-user
+  power-domain channel: the rate model assigns every user the same
+  relay→destination SINR $\gamma_{rd}$. Each user is therefore forwarded at the
+  full relay SU power $(1-\alpha)P_r$ and decoded with a two-layer SIC at the
+  destination — cancel the relayed PU, then decode the SU — consistent with
+  $\gamma_{e2e,i} = \min(\gamma_{sr,i}, \gamma_{rd})$. End-to-end SU bits are
+  compared to the *original source bits*, so hop-1 errors propagate.
+- **Primary user** uses selection combining between its direct link and the
+  DF-relayed link (the relay's decoded PU forwarded on $h_{rp}$), with the
+  branch chosen by the physics (higher SINR).
+
+The multi-user NOMA SIC — and hence the imperfect-SIC error floor — lives at
+**hop 1** (the only hop where users are superposed on a common antenna). Reports
+overlay the waveform points (bold markers) on the perfect-SIC Monte-Carlo and
+BPSK-theory reference: where the relay's SIC is well conditioned the waveform
+tracks the perfect-SIC curve, and where users are poorly power-separated the
+hop-1 (and hence end-to-end) BER rises **above** it — the imperfect-SIC penalty.
+
 ---
 
 ## 5. Configuration Parameters (`configs/config.yaml`)

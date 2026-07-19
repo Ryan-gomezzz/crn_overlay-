@@ -394,9 +394,14 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
             runs = metrics_by_agent[agent]
             if not runs: continue
             hist = runs[-1].get("history", {})
-            _scatter("sinr_hop1_db_pts", "ber_hop1_mc_pts", hist, "#2ca02c", "o", 'SN (SU) — hop-1 (relay) MC')
-            _scatter("sinr_db_pts", "ber_mc_pts", hist, "#1f77b4", "s", 'SN (SU) — end-to-end MC')
-            _scatter("pu_sinr_db_pts", "pu_ber_mc_pts", hist, "#d62728", "x", 'PN (PU) — end-to-end MC')
+            # Perfect-SIC per-hop-SINR Monte-Carlo (light markers)
+            _scatter("sinr_hop1_db_pts", "ber_hop1_mc_pts", hist, "#7fbf7f", "o", 'SN (SU) hop-1 — perfect-SIC MC')
+            _scatter("sinr_db_pts", "ber_mc_pts", hist, "#8fbfe0", "s", 'SN (SU) e2e — perfect-SIC MC')
+            # Waveform imperfect-SIC (bold markers) — these lie above, showing the
+            # NOMA/SIC error floor from cancelling *detected* symbols.
+            _scatter("sinr_hop1_db_pts", "ber_wf_hop1_mc_pts", hist, "#2ca02c", "^", 'SN (SU) hop-1 — waveform (imperfect SIC)')
+            _scatter("sinr_db_pts", "ber_wf_e2e_mc_pts", hist, "#1f77b4", "D", 'SN (SU) e2e — waveform (imperfect SIC)')
+            _scatter("pu_sinr_db_pts", "pu_ber_wf_mc_pts", hist, "#d62728", "x", 'PN (PU) e2e — waveform')
 
         # Single-hop BPSK theory reference line across the observed SINR range
         if all_sinr:
@@ -413,8 +418,8 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         ax.set_ylim(1e-6, 1.0)
         ax.set_xlabel('SINR (dB)  [hop-1: γ_sr,  end-to-end: min(γ_sr, γ_rd)]')
         ax.set_ylabel('Bit Error Rate (BER)')
-        ax.set_title('Per-Hop DF BER vs SINR — Monte-Carlo (points) vs BPSK Theory (line)\n'
-                     'hop-1 = relay decode; end-to-end = destination (SN = secondary, PN = primary)')
+        ax.set_title('Per-Hop DF-NOMA BER vs SINR\n'
+                     'perfect-SIC MC (light) vs waveform imperfect-SIC (bold) vs single-hop BPSK theory (line)')
         ax.grid(True, which="both", ls="--", alpha=0.3)
         handles, labels = ax.get_legend_handles_labels()
         by_label = dict(zip(labels, handles))

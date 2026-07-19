@@ -40,6 +40,7 @@ import numpy as np
 from simulator.channels import RayleighFading
 from simulator.propagation import calculate_path_loss
 from simulator.utils import ber_bpsk_theory, df_ber_theory
+from simulator.ber_waveform import simulate_waveform_df_noma_ber
 
 
 # =====================================================================
@@ -188,6 +189,9 @@ class NOMAOverlaySimulator:
 
         # Current effective channel gains (refreshed every step)
         self._eff_gains: Dict[str, float] = {}
+        self._eff_channels_true: Dict[str, complex] = {}
+        # Physical parameters of the most recent transmission (for waveform BER)
+        self._last_tx: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------
     # Distance & path-loss pre-computation
@@ -238,21 +242,28 @@ class NOMAOverlaySimulator:
         """Generate Rayleigh fading |g|² for every link and combine
         with path loss to produce effective channel gains |h|² = PL·|g|².
         Returns both true and estimated effective gains.
+
+        Also stores the *complex* true effective channel h = g·√PL for each link
+        in ``self._eff_channels_true`` so the waveform-level BER simulator can
+        reconstruct the exact received signals for this realization.
         """
         eff_true: Dict[str, float] = {}
         eff_est: Dict[str, float] = {}
+        eff_complex_true: Dict[str, complex] = {}
         tau = self.cfg.csi_error_variance
-        
+
         for name, pl in self._path_losses.items():
             g = self._fading.generate_coefficient(self._rng)
             e = self._fading.generate_coefficient(self._rng)
-            
+
             # Imperfect CSI estimate
             g_hat = math.sqrt(1.0 - tau**2) * g + tau * e
-            
+
             eff_true[name] = float(abs(g) ** 2) * pl
             eff_est[name] = float(abs(g_hat) ** 2) * pl
-            
+            eff_complex_true[name] = g * math.sqrt(pl)
+
+        self._eff_channels_true = eff_complex_true
         return eff_true, eff_est
 
     # ------------------------------------------------------------------
@@ -428,6 +439,27 @@ class NOMAOverlaySimulator:
         self._step_count += 1
         truncated = self._step_count >= cfg.max_steps
 
+        # Capture this transmission's complex channels + powers so the waveform
+        # BER simulator can reconstruct the received signals for THIS realization
+        # (must happen before the channels are regenerated below).
+        ch = self._eff_channels_true
+        self._last_tx = {
+            "h_sr": np.array([ch[f"sr_{i}"] for i in range(N)]),
+            "h_sp": np.array([ch[f"sp_{i}"] for i in range(N)]),
+            "h_pr": ch["pr_link"],
+            "h_pp": ch["pp"],
+            "h_pd": ch["pd"],
+            "h_rd": ch["rd"],
+            "h_rp": ch["rp"],
+            "p_su": p_su.copy(),
+            "p_relay": p_relay,
+            "alpha": alpha,
+            "p_pt": p_pt,
+            "n0": N0,
+            "sic_order": sic_order.copy(),
+            "pu_use_direct": bool(snr_pu_direct >= snr_pu_relayed),
+        }
+
         # Generate new channels for the next observation
         self._eff_gains_true, self._eff_gains_est = self._generate_all_channels()
         obs = self._build_observations()
@@ -530,6 +562,22 @@ class NOMAOverlaySimulator:
     def num_agents(self) -> int:
         """Number of secondary-user agents."""
         return self.cfg.num_su
+
+    def simulate_waveform_ber(
+        self, n_bits: int = 4000, rng: Optional[np.random.Generator] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Run the waveform-level (imperfect-SIC) DF-NOMA BER for the most recent
+        transmission. Returns ``None`` if no step has been taken yet."""
+        if self._last_tx is None:
+            return None
+        tx = self._last_tx
+        return simulate_waveform_df_noma_ber(
+            h_sr=tx["h_sr"], h_sp=tx["h_sp"], h_pr=tx["h_pr"], h_pp=tx["h_pp"],
+            h_pd=tx["h_pd"], h_rd=tx["h_rd"], h_rp=tx["h_rp"],
+            p_su=tx["p_su"], p_relay=tx["p_relay"], alpha=tx["alpha"],
+            p_pt=tx["p_pt"], n0=tx["n0"], sic_order=tx["sic_order"],
+            pu_use_direct=tx["pu_use_direct"], n_bits=n_bits, rng=rng,
+        )
 
     def get_distances(self) -> Dict[str, float]:
         """Return the pre-computed distance dictionary (debug helper)."""

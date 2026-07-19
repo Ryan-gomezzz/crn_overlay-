@@ -315,7 +315,8 @@ def run_single_train(
         ber_bpsk_theory, ber_bpsk_montecarlo, df_ber_theory, simulate_df_ber_montecarlo,
     )
     ber_rng = np.random.default_rng(seed)
-    BER_MC_BITS = 10000  # Monte-Carlo bits per sampled point (resolution floor ~1e-4)
+    BER_MC_BITS = 10000    # per-hop SINR Monte-Carlo bits (resolution floor ~1e-4)
+    WAVEFORM_BITS = 4000   # waveform imperfect-SIC bits per sampled point (heavier)
 
     # Store evaluation metrics history
     history = {
@@ -334,10 +335,13 @@ def run_single_train(
         "ber_mc_pts": [],         # SU e2e DF Monte-Carlo
         "sinr_hop1_db_pts": [],   # SU hop-1 SINR
         "ber_hop1_pts": [],       # SU hop-1 theory
-        "ber_hop1_mc_pts": [],    # SU hop-1 Monte-Carlo
+        "ber_hop1_mc_pts": [],    # SU hop-1 Monte-Carlo (per-hop SINR, perfect SIC)
+        "ber_wf_hop1_mc_pts": [], # SU hop-1 waveform (imperfect SIC)
+        "ber_wf_e2e_mc_pts": [],  # SU end-to-end waveform (imperfect SIC)
         "pu_sinr_db_pts": [],
         "pu_ber_pts": [],
         "pu_ber_mc_pts": [],
+        "pu_ber_wf_mc_pts": [],   # PU end-to-end waveform
         "pu_throughput": [],
         "average_power": [],
         "pu_average_power": [],
@@ -403,7 +407,15 @@ def run_single_train(
                 history["pu_sinr_db_pts"].append(10.0 * math.log10(max(1e-9, sinr_pu)))
                 history["pu_ber_pts"].append(float(next_info.get("ber_pu", ber_bpsk_theory(sinr_pu))))
                 history["pu_ber_mc_pts"].append(pu_mc)
-            
+
+                # Waveform-level (imperfect-SIC) BER for the same transmission:
+                # actual symbol-by-symbol SIC at the relay and destination.
+                wf = env.simulate_waveform_ber(n_bits=WAVEFORM_BITS, rng=ber_rng)
+                if wf is not None:
+                    history["ber_wf_hop1_mc_pts"].append(wf["ber_su_hop1"])
+                    history["ber_wf_e2e_mc_pts"].append(wf["ber_su_e2e"])
+                    history["pu_ber_wf_mc_pts"].append(wf["ber_pu_e2e"])
+
             # Store transition
             agent.replay_buffer.add(obs, action, reward, next_obs, done or truncated, info)
             
@@ -537,6 +549,9 @@ def run_single_train(
         "eval_pu_ber": final_metrics.get("ber_pu", 0.0),
         "eval_su_ber_hop1": final_metrics.get("ber_hop1", 0.0),
         "eval_pu_ber_hop1": final_metrics.get("ber_pu_hop1", 0.0),
+        # Waveform (imperfect-SIC) BER, averaged over the sampled scatter points
+        "eval_su_ber_waveform": float(np.mean(history["ber_wf_e2e_mc_pts"])) if history["ber_wf_e2e_mc_pts"] else 0.0,
+        "eval_su_ber_hop1_waveform": float(np.mean(history["ber_wf_hop1_mc_pts"])) if history["ber_wf_hop1_mc_pts"] else 0.0,
         "history": history
     }
     
