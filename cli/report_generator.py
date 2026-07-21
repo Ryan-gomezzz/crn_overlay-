@@ -360,14 +360,19 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
                 rates_arr = np.array(hist["per_user_rates"])
                 episodes = np.array(hist["episodes"])
                 if len(rates_arr.shape) == 2:
-                    for i in range(rates_arr.shape[1]):
+                    n_users = rates_arr.shape[1]
+                    for i in range(n_users):
                         plotted_individual = True
+                        # The last entry is the relay-SU's own data (single hop).
+                        is_relay = (i == n_users - 1)
+                        label = f'SU {i+1} (relay-SU, own data)' if is_relay else f'SU {i+1} (source)'
                         ax.plot(episodes, smooth_curve(rates_arr[:, i], 0.9),
                                 color=USER_COLORS[i % len(USER_COLORS)], linewidth=1.8,
-                                label=f'SU {i+1}')
+                                linestyle='--' if is_relay else '-', label=label)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Individual Rate (bits/s/Hz)')
-        ax.set_title('Individual SU Throughput vs Episode (NOMA Fairness)')
+        ax.set_title('Individual SU Throughput vs Episode (NOMA Fairness)\n'
+                     'sources are two-hop DF; the relay-SU\'s own data is single-hop')
         if plotted_individual:
             ax.legend(fontsize=9, loc='center left', bbox_to_anchor=(1, 0.5))
             fig.tight_layout()

@@ -21,10 +21,11 @@ Radio Network (CRN)** in *overlay* mode, and trains it with a custom **Multi-Age
 
 - **Primary network:** a Primary Transmitter (PT) → Primary Receiver (PR) link that owns the
   spectrum and requires interference protection.
-- **Secondary network:** `N` Secondary User sources transmit **simultaneously (NOMA, power
-  domain)** to a shared **Decode-and-Forward (DF) relay**, which forwards to a common SU
-  destination over two half-duplex time slots. The relay applies **Successive Interference
-  Cancellation (SIC)**.
+- **Secondary network:** `N` Secondary Users share a destination. **One of them (SU_N) *is*
+  the half-duplex Decode-and-Forward relay — there is no separate relay node.** The other
+  `M = N-1` SUs are sources that transmit **simultaneously (NOMA, power domain)** to the
+  relay-SU, which applies **Successive Interference Cancellation (SIC)**. In slot 2 the
+  relay-SU forwards their decoded data **together with its own data** and the PU's data.
 - The agents observe only **imperfect CSI** and learn robust power-allocation policies.
 
 The full mathematical model is documented in **[docs/SYSTEM_MODEL.md](docs/SYSTEM_MODEL.md)** —
@@ -36,16 +37,18 @@ that document is the source of truth for the protocol, spaces, and reward.
 
 Two-timeslot block-fading protocol (see [docs/SYSTEM_MODEL.md](docs/SYSTEM_MODEL.md) for full detail):
 
-- **Slot 1 — multiple access:** PT and all `N` SUs transmit. The relay decodes the PU first
-  (SUs as interference), subtracts it, then decodes SUs via SIC in descending `|h_sr,i|²` order.
-- **Slot 2 — superposition forwarding:** the relay forwards a mix of PU and SU signals using a
-  power-split factor `α` (PU) and `1−α` (SU). The SU destination decodes PU then SU.
+- **Slot 1 — multiple access:** PT and the `M = N−1` SU *sources* transmit. The relay-SU is
+  half-duplex (listens only); it decodes the PU first (sources as interference), subtracts it,
+  then decodes the sources via SIC in descending `|h_sr,i|²` order.
+- **Slot 2 — superposition forwarding:** the relay-SU transmits a power-domain superposition of
+  the PU's data (share `α`), **its own data** (share `own_share` of the remaining `1−α`), and
+  the decoded source data. The destination SICs the streams in descending received power.
 
-Per-user end-to-end DF rate and secondary sum-rate objective:
+Sources are two-hop (DF); the relay-SU's own data is single-hop:
 
 ```
-γ_e2e,i = min(γ_sr,i, γ_rd,i)
-R_SU    = Σ_i  ½ · log₂(1 + γ_e2e,i)
+γ_e2e,i = min(γ_sr,i, γ_fwd,i)          # sources
+R_SU    = Σ_i ½·log₂(1+γ_e2e,i) + ½·log₂(1+γ_own)
 ```
 
 Interference constraint at the PR: `I_PR = Σ_i P_s,i·|h_sp,i|² + (1−α)·P_rel·|h_rp|² ≤ I_th`.
@@ -54,9 +57,9 @@ Interference constraint at the PR: `I_PR = Σ_i P_s,i·|h_sp,i|² + (1−α)·P_
 
 | | Shape | Description |
 |---|---|---|
-| **Observation** (per SU) | `(8,)` | Estimated channel gains `[ĥ_sr, ĥ_sp, ĥ_sd, ĥ_pp, ĥ_pr, ĥ_pd, ĥ_rd, ĥ_rp]`, in dB and normalized. Each agent encodes its last `L=10` observations with a GRU. |
-| **Action** (joint) | `(N+2,)` in `[0,1]` | `N` SU source powers, `1` relay power, `1` relay power-split factor `α`. |
-| **Reward** | scalar | Secondary sum-rate `R_SU` (with an interference-constraint penalty). |
+| **Observation** (per SU) | `(8,)` | Estimated channel gains, in dB and normalized. Sources use `[ĥ_sr, ĥ_sp, ĥ_sd, …]`; the relay-SU's row uses its own links `[ĥ_rd, ĥ_rp, ĥ_pr, …]`. Each agent encodes its last `L=10` observations with a GRU. |
+| **Action** (joint) | `(N+2,)` in `[0,1]` | `M = N−1` source powers, `1` relay-SU power, `α` (PU share), `own_share` (relay's own data share). |
+| **Reward** | scalar | Secondary sum-rate `R_SU` (sources' e2e rates + relay-SU's own rate), with an interference-constraint penalty. |
 
 ---
 

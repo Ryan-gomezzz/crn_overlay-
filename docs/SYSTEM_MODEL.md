@@ -9,7 +9,7 @@ Our system models a **Multi-Agent Non-Orthogonal Multiple Access (NOMA) Cognitiv
 ## 1. Network Architecture
 The network consists of two overlapping systems sharing the same frequency spectrum:
 *   **Primary Network**: A Primary Transmitter (PT) communicating with a Primary Receiver (PR). This network owns the spectrum license and requires strict Quality-of-Service (QoS) guarantees.
-*   **Secondary Network**: $N$ Secondary Users (SU sources) communicating with a common SU Destination (SUd) via a shared Secondary Relay (SUr). The SUs opportunistically use the spectrum by operating in an "overlay" mode, assisting the Primary Network in exchange for spectrum access.
+*   **Secondary Network**: $N$ Secondary Users sharing a common SU Destination (SUd). **One of the $N$ SUs — SU$_N$ — is itself the half-duplex Decode-and-Forward relay; there is no separate relay node.** The remaining $M = N-1$ SUs are sources. The relay-SU carries its **own** traffic in addition to forwarding the sources', and the secondary network operates in "overlay" mode, assisting the Primary Network in exchange for spectrum access.
 
 ---
 
@@ -18,15 +18,22 @@ Communication occurs over a block-fading duration divided into two equal time sl
 
 ### Slot 1: Multiple Access Broadcast
 *   The Primary Transmitter (PT) broadcasts its signal $x_p$ with power $P_{pt}$.
-*   All $N$ Secondary Users simultaneously transmit their signals $x_{s,i}$ with power $P_{s,i}$ using **NOMA** in the power domain.
-*   **Relay Reception**: The shared DF Relay receives a superposed signal comprising the primary message and all secondary messages, corrupted by Additive White Gaussian Noise (AWGN) $N_0$.
-*   **Decoding (SIC)**: The Relay decodes the PU signal first (treating SUs as interference). Once successfully decoded and subtracted, it decodes the SU signals using **Successive Interference Cancellation (SIC)**, decoding users in descending order of their channel strengths $|h_{sr,i}|^2$.
+*   The $M = N-1$ SU **sources** simultaneously transmit their signals $x_{s,i}$ with power $P_{s,i}$ using **NOMA** in the power domain. The relay-SU is **half-duplex**: it listens in this slot and does not transmit.
+*   **Relay Reception**: The relay-SU receives a superposed signal comprising the primary message and all $M$ source messages, corrupted by AWGN $N_0$.
+*   **Decoding (SIC)**: The relay-SU decodes the PU signal first (treating the sources as interference). Once decoded and subtracted, it decodes the source signals using **Successive Interference Cancellation (SIC)**, in descending order of $|h_{sr,i}|^2$.
 
 ### Slot 2: Superposition Forwarding
-*   The Relay forwards a superposed mixture of the PU and SU signals. It allocates a power splitting fraction $\alpha \in [0,1]$ for the PU and $(1-\alpha)$ for the SUs.
+*   The relay-SU transmits a power-domain superposition of **three** things: the PU's message (fraction $\alpha$ of its power $P_{rel}$), its **own** data, and the $M$ decoded source messages. Within the secondary share $(1-\alpha)P_{rel}$, a fraction `own_share` goes to its own data and the remainder is split across the forwarded streams by a fixed geometric allocation ($\beta_k \propto \mu^k$ in the relay's SIC order).
 *   The PT may also transmit new data (which acts as interference to the SU Destination).
-*   **Destination Reception**: The SU Destination receives the relayed signal, decodes the PU signal, subtracts it, and then decodes the superposed SU signal.
-*   **Interference at PR**: During Slot 1, all SU transmissions cause interference at the PR. During Slot 2, the Relay's SU-allocated power $(1-\alpha)P_{rel}$ causes interference at the PR.
+*   **Destination Reception**: The SU Destination performs SIC over the superposed streams in **descending received power**, cancelling each detected stream before decoding the next.
+*   **Interference at PR**: During Slot 1, the $M$ source transmissions cause interference at the PR. During Slot 2, the relay-SU's secondary payload $(1-\alpha)P_{rel}$ (own + forwarded) causes interference at the PR. The relayed PU signal is *not* interference.
+
+### Rates
+Each **source** $i$ is Decode-and-Forward and therefore limited by its weaker hop,
+$\gamma_{e2e,i} = \min(\gamma_{sr,i}, \gamma_{fwd,i})$, whereas the **relay-SU's own data**
+traverses a single hop (slot 2 only):
+
+$$R_i = \tfrac12\log_2(1+\gamma_{e2e,i}),\qquad R_{\text{relay}} = \tfrac12\log_2(1+\gamma_{\text{own}}),\qquad R_{SU} = \sum_{i=1}^{M} R_i + R_{\text{relay}}.$$
 
 ---
 
@@ -48,14 +55,17 @@ where $e \sim \mathcal{CN}(0, 1)$ is the estimation error.
 ## 4. Multi-Agent Reinforcement Learning (MATD3)
 The system uses **Centralized Training with Decentralized Execution (CTDE)** via the MATD3 algorithm.
 
-*   **Observation Space (per SU agent)**: An 8-Dimensional vector of the *estimated* channel power gains (converted to dB and normalized). 
+*   **Observation Space (per SU agent)**: An 8-Dimensional vector of the *estimated* channel power gains (converted to dB and normalized). For a **source** $i$:
     $$s_t^i = [\hat{h}_{sr_i}, \hat{h}_{sp_i}, \hat{h}_{sd_i}, \hat{h}_{pp}, \hat{h}_{pr}, \hat{h}_{pd}, \hat{h}_{rd}, \hat{h}_{rp}]$$
+    The **relay-SU**'s row replaces the first three with its own links $[\hat{h}_{rd}, \hat{h}_{rp}, \hat{h}_{pr}]$ (its transmit links to the destination and PR, and the PT link it must decode through).
 *   **Recurrent Encoding**: Because the observations are noisy and partial (Imperfect CSI over time-varying fading), each agent passes its last $L=10$ observations through a **Gated Recurrent Unit (GRU)** to form a latent belief state.
-*   **Action Space**: The joint action space has $N+2$ continuous dimensions bound to $[0, 1]$:
-    *   $N$ values: Normalized Transmit powers for each SU source.
-    *   1 value: Normalized Transmit power for the shared Relay.
-    *   1 value: Power splitting factor $\alpha$ used by the Relay.
-*   **Reward Function**: Maximize the sum-rate of the Secondary Users: $R_{SU} = \sum_{i=1}^N \frac{1}{2} \log_2(1 + \gamma_{e2e,i})$.
+*   **Action Space**: The joint action space has $N+2$ continuous dimensions bound to $[0, 1]$ (with $M = N-1$ sources):
+    *   $M$ values: Normalized transmit powers for each SU **source**.
+    *   1 value: Normalized transmit power of the **relay-SU**.
+    *   1 value: Power splitting factor $\alpha$ (relay-SU power given to the PU).
+    *   1 value: `own_share` — fraction of the relay-SU's secondary power spent on its **own** data (remainder forwards the sources).
+*   **Agents**: $N$ GRU belief encoders (one per SU, including the relay-SU). The $M$ source actors each emit their transmit power; a centralized head consumes **all** $N$ beliefs and emits the relay-SU's $[P_{rel}, \alpha, \texttt{own\_share}]$.
+*   **Reward Function**: Maximize the secondary sum-rate $R_{SU}$ defined in §2 (sources' end-to-end rates plus the relay-SU's own rate).
 *   **Constraints**:
     *   The interference caused at the PR is kept below the threshold ($I_{PR} \le I_{th}$) by a penalty term in the environment reward (`camo_td3.penalty_coef_inf`).
     *   Adaptive **Lagrangian multipliers** (learned in log/softplus space) additionally enforce the Primary-User QoS-rate and per-agent energy constraints, shaping the actor objective via the dedicated QoS and energy critics.
@@ -110,23 +120,25 @@ $h = g\sqrt{PL}$ and runs **real SIC**, subtracting the *detected* symbols:
   $|h_{sr,i}|^2$ order. A wrong decision is cancelled with the wrong symbol, so
   its residual leaks into later users — producing the characteristic **NOMA/SIC
   error floor**.
-- **Hop 2 (destination).** Hop 2 is a per-user bottleneck, not an N-user
-  power-domain channel: the rate model assigns every user the same
-  relay→destination SINR $\gamma_{rd}$. Each user is therefore forwarded at the
-  full relay SU power $(1-\alpha)P_r$ and decoded with a two-layer SIC at the
-  destination — cancel the relayed PU, then decode the SU — consistent with
-  $\gamma_{e2e,i} = \min(\gamma_{sr,i}, \gamma_{rd})$. End-to-end SU bits are
-  compared to the *original source bits*, so hop-1 errors propagate.
+- **Hop 2 (destination).** The relay-SU re-encodes and transmits the
+  superposition $x_r = \sqrt{\alpha P_r}\,\hat x_p + \sqrt{P_{\text{own}}}\,x_{\text{own}} + \sum_i \sqrt{P_{fwd,i}}\,\hat x_{s,i}$
+  on the common channel $h_{rd}$. The destination performs SIC in descending
+  received power, cancelling each *detected* stream. Source bits are compared to
+  the *original* source bits (so hop-1 errors propagate); the relay-SU's own data
+  is single-hop.
 - **Primary user** uses selection combining between its direct link and the
   DF-relayed link (the relay's decoded PU forwarded on $h_{rp}$), with the
   branch chosen by the physics (higher SINR).
 
-The multi-user NOMA SIC — and hence the imperfect-SIC error floor — lives at
-**hop 1** (the only hop where users are superposed on a common antenna). Reports
-overlay the waveform points (bold markers) on the perfect-SIC Monte-Carlo and
-BPSK-theory reference: where the relay's SIC is well conditioned the waveform
-tracks the perfect-SIC curve, and where users are poorly power-separated the
-hop-1 (and hence end-to-end) BER rises **above** it — the imperfect-SIC penalty.
+Both hops are genuine power-domain NOMA channels, so the imperfect-SIC error
+floor appears at each. A practically important consequence the waveform exposes
+and the Gaussian-SINR model cannot: when the stream being decoded does **not**
+dominate the not-yet-cancelled streams, the residual is *discrete BPSK
+interference*, which is markedly more damaging than an equal-power Gaussian
+approximation — the measured BER then far exceeds
+$\tfrac12\mathrm{erfc}(\sqrt{\gamma})$ evaluated at the same SINR. Reports overlay
+the waveform points (bold markers) on the perfect-SIC Monte-Carlo and BPSK-theory
+reference; the gap is the imperfect-SIC penalty.
 
 ---
 
@@ -155,10 +167,11 @@ Every physical and algorithmic aspect of the system is parameterized and highly 
 ### Multi-User NOMA Layout
 | Parameter | Default | Description |
 | :--- | :--- | :--- |
-| `multi_user.num_su` | `3` | Number of Secondary Users ($N$). |
-| `multi_user.su_coords` | `[[50, 200], ...]` | 2D List of [x, y] coordinates for each SU source. |
+| `multi_user.num_su` | `3` | **Total** Secondary Users $N$, **including the relay-SU**. |
+| `multi_user.su_coords` | `[[50, 200], [52, 200]]` | Coordinates of the $N-1$ SU **sources**. |
+| `multi_user.sur_coords` | `[50.0, 190.0]` | Coordinate of SU$_N$, **the relay-SU** (one of the $N$ SUs, not a separate node). |
 | `multi_user.sud_coords` | `[50.0, 180.0]` | Coordinate for the SU Destination. |
-| `multi_user.sur_coords` | `[50.0, 190.0]` | Coordinate for the shared SU Relay. |
+| `multi_user.relay_fwd_mu` | `0.5` | Geometric ratio $\mu$ splitting the relay's forwarding power across streams. |
 | `multi_user.interference_threshold_dbm` | `-50.0` | The maximum tolerable interference $I_{th}$ at the PR. |
 
 ### Channel Physics

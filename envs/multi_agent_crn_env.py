@@ -23,11 +23,17 @@ class MultiAgentCRNEnv(gym.Env):
     """
     Multi-Agent Environment for NOMA Overlay CRN.
     
-    Action Space: Box(0, 1, shape=(N+2,))
-        - [p_su_1, ..., p_su_N, p_relay, alpha]
+    One of the N secondary users (SU_N) IS the relay -- there is no separate
+    relay node. The other N-1 SUs are sources.
+
+    Action Space: Box(0, 1, shape=(N+2,)) with M = N-1 sources
+        - [p_src_1, ..., p_src_M, p_relay, alpha, own_share]
+        - alpha     : relay-SU power fraction given to the PU
+        - own_share : fraction of the relay-SU's secondary power spent on its
+                      OWN data (the remainder forwards the decoded sources)
 
     Observation Space: Box(-inf, inf, shape=(N, 8))
-        - N agents, each with 8 features
+        - rows 0..M-1 : the SU sources; row M : the relay-SU
     """
     metadata = {"render_modes": ["human"]}
 
@@ -63,6 +69,7 @@ class MultiAgentCRNEnv(gym.Env):
             if "sud_coords" in mu_cfg: cfg.sud_coords = mu_cfg["sud_coords"]
             if "sur_coords" in mu_cfg: cfg.sur_coords = mu_cfg["sur_coords"]
             if "interference_threshold_dbm" in mu_cfg: cfg.interference_threshold_dbm = float(mu_cfg["interference_threshold_dbm"])
+            if "relay_fwd_mu" in mu_cfg: cfg.relay_fwd_mu = float(mu_cfg["relay_fwd_mu"])
             
         if "camo_td3" in self._raw_config:
             camo_cfg = self._raw_config["camo_td3"]
@@ -136,7 +143,8 @@ class MultiAgentCRNEnv(gym.Env):
         info["pu_throughput"] = info["pu_rate"]
         info["primary_throughput"] = info["pu_rate"]
         info["sinr_su"] = float(np.mean(info["gamma_e2e"])) if "gamma_e2e" in info else 0.0
-        info["average_power"] = (sum(info["p_su_watts"]) + info["p_relay_watts"]) / (self.num_agents + 1)
+        # Average transmit power across the N secondary users (M sources + relay-SU)
+        info["average_power"] = (sum(info["p_su_watts"]) + info["p_relay_watts"]) / max(self.num_agents, 1)
         # Primary-network transmit power is fixed (PT at p_primary_dbm); expose it
         # so reports can show average power for both the PN and the SN.
         info["pu_average_power"] = float(self.simulator.cfg.p_pt)
@@ -155,11 +163,11 @@ class MultiAgentCRNEnv(gym.Env):
         self._act_history = np.roll(self._act_history, -1, axis=1)
         self._act_history[:, -1, 0] = action[:self.num_agents]  # SU powers
         
-        # Relay decodes user i if user i is in sic_order and gamma_sr is decent? 
-        # Actually in NOMA simulator, everyone is decoded in sic_order, but we can just use 1 for simplicity 
-        # or base it on gamma_sr > 0
-        dec = (np.array(info["gamma_sr"]) > 1e-6).astype(np.float32)
-        info["relay_decoded"] = float(np.mean(dec))
+        # Per-source "was it decoded at the relay-SU" flag. The relay-SU itself
+        # (last row) is the decoder, so it is marked as always decoded.
+        dec_src = (np.array(info["gamma_sr"], dtype=np.float32) > 1e-6).astype(np.float32)
+        dec = np.concatenate([dec_src, np.ones(1, dtype=np.float32)])
+        info["relay_decoded"] = float(np.mean(dec_src)) if dec_src.size else 1.0
         self._dec_history = np.roll(self._dec_history, -1, axis=1)
         self._dec_history[:, -1, 0] = dec
         

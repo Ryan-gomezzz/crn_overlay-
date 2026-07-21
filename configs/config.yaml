@@ -63,13 +63,18 @@ evaluation:
   eval_interval: 500
   save_dir: experiments/checkpoints/
 
-# Multi-User NOMA Overlay CRN Parameters
+# Multi-User Cooperative NOMA Overlay CRN Parameters
+#
+# One of the secondary users IS the relay -- there is no separate relay node.
+# Of the N secondary users, SU_N (at sur_coords) acts as the half-duplex
+# Decode-and-Forward relay: it listens in slot 1, then in slot 2 transmits a
+# superposition of its OWN data, the decoded source data, and the PU's data.
 multi_user:
-  num_su: 3                        # Number of secondary users (N)
-  su_coords:                       # Coordinates for each SU source
-    - [50.0, 200.0]                # SU_1
-    - [52.0, 200.0]                # SU_2
-    - [48.0, 200.0]                # SU_3
-  sud_coords: [50.0, 180.0]        # SU_N (destination)
-  sur_coords: [50.0, 190.0]        # Single shared relay (an SU acting as relay)
+  num_su: 3                        # Total secondary users N, INCLUDING the relay-SU
+  su_coords:                       # Coordinates of the N-1 SU *sources*
+    - [50.0, 200.0]                # SU_1 (source)
+    - [52.0, 200.0]                # SU_2 (source)
+  sur_coords: [50.0, 190.0]        # SU_3 = the relay-SU (relays + sends its own data)
+  sud_coords: [50.0, 180.0]        # SU destination
+  relay_fwd_mu: 0.5                # Geometric power split across relayed streams at the relay
   interference_threshold_dbm: -50.0  # Relaxed from -80 to give the agent a viable action space

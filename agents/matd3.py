@@ -43,9 +43,12 @@ class MATD3Agent:
         self.pu_rate_threshold = camo_cfg.get("pu_rate_threshold", 0.5) / (1.0 - self.gamma)
         self.energy_limit_watts = camo_cfg.get("energy_limit_watts", 0.1) / (1.0 - self.gamma)
         
-        # Environment properties
+        # Environment properties. One of the N SUs is the relay-SU, so there are
+        # N-1 sources; the joint action is (N-1) source powers + [p_relay, alpha,
+        # own_share] = N+2 dimensions.
         mu_cfg = config.get("multi_user", {})
-        self.num_agents = mu_cfg.get("num_su", 3)
+        self.num_agents = mu_cfg.get("num_su", 3)      # total SUs incl. relay-SU
+        self.num_sources = max(self.num_agents - 1, 0)  # SU sources
         self.obs_dim = 8
         self.action_dim = 1
         
@@ -57,8 +60,9 @@ class MATD3Agent:
         ])
         self.actor_targets = copy.deepcopy(self.actors)
         
-        # 2. Centralized Actor for Relay (outputs [p_relay, alpha])
-        self.relay_actor = CentralizedRelayActor(num_agents=self.num_agents, action_dim=2).to(self.device)
+        # 2. Centralized head for the relay-SU (outputs [p_relay, alpha, own_share]).
+        # It consumes every SU's belief, including the relay-SU's own.
+        self.relay_actor = CentralizedRelayActor(num_agents=self.num_agents, action_dim=3).to(self.device)
         self.relay_actor_target = copy.deepcopy(self.relay_actor)
         
         # 3. Centralized Critics (Thr, QoS, Nrg)
@@ -133,27 +137,30 @@ class MATD3Agent:
         
         actions = np.zeros(self.num_agents + 2, dtype=np.float32)
         beliefs = []
-        
-        # 1. Get SU actions
+        M = self.num_sources
+
+        # 1. Encode every SU's history. Only the M sources contribute a transmit
+        # power to the joint action; the relay-SU's encoder feeds the relay head.
         for i in range(self.num_agents):
             agent_hist = hist_tensor[:, i, :, :]  # (1, L, 11)
-            
+
             self.actors[i].eval()
             with torch.no_grad():
                 a_i = self.actors[i](agent_hist)  # (1, 1)
                 b_i = self.actors[i].get_belief(agent_hist) # (1, 64)
             self.actors[i].train()
-            
-            actions[i] = a_i.cpu().item()
+
+            if i < M:
+                actions[i] = a_i.cpu().item()
             beliefs.append(b_i)
-            
-        # 2. Get Relay action
+
+        # 2. Relay-SU action: [p_relay, alpha, own_share]
         global_belief = torch.cat(beliefs, dim=1) # (1, N*64)
         self.relay_actor.eval()
         with torch.no_grad():
-            a_r = self.relay_actor(global_belief) # (1, 2)
+            a_r = self.relay_actor(global_belief) # (1, 3)
         self.relay_actor.train()
-        actions[self.num_agents:] = a_r.cpu().numpy()[0]
+        actions[M:M + 3] = a_r.cpu().numpy()[0]
         
         if explore:
             # Simple Gaussian noise exploration
@@ -187,9 +194,11 @@ class MATD3Agent:
                 # Add target policy smoothing noise
                 noise = (torch.randn_like(n_a) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
                 n_a = (n_a + noise).clamp(0.0, 1.0)
-                
+
                 next_beliefs.append(n_b)
-                next_actions.append(n_a)
+                # Only the M sources contribute a power to the joint action.
+                if i < self.num_sources:
+                    next_actions.append(n_a)
                 
             next_global_belief = torch.cat(next_beliefs, dim=1) # (B, N*64)
             
@@ -265,7 +274,9 @@ class MATD3Agent:
             for i in range(self.num_agents):
                 a_i = self.actors[i](hist_seqs[:, i, :, :])
                 b_i = self.actors[i].get_belief(hist_seqs[:, i, :, :])
-                a_curr.append(a_i)
+                # Only the M sources contribute a power to the joint action.
+                if i < self.num_sources:
+                    a_curr.append(a_i)
                 b_curr.append(b_i)
                 
             gb_curr = torch.cat(b_curr, dim=1)
