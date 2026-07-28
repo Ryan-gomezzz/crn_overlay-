@@ -40,7 +40,7 @@ training:
 camo_td3:
   history_length: 10
   decoding_threshold: 0.1         # Lowered to make it easier for relay to decode
-  pu_rate_threshold: 5.0e6        # PU QoS floor in bits/s = 0.5 bits/s/Hz × 10 MHz
+  pu_rate_threshold: 5000000.0       # PU QoS floor in bits/s = 0.5 bits/s/Hz × 10 MHz
   interference_limit_dbm: -80.0   
   energy_limit_watts: 0.1         
   penalty_coef_inf: 1.0e10          # Penalty coefficient for interference constraint

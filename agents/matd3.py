@@ -40,7 +40,7 @@ class MATD3Agent:
         self.history_length = camo_cfg.get("history_length", 10)
         
         # Constraints (Discounted to match Q-values)
-        self.pu_rate_threshold = camo_cfg.get("pu_rate_threshold", 0.5) / (1.0 - self.gamma)
+        self.pu_rate_threshold = float(camo_cfg.get("pu_rate_threshold", 0.5)) / (1.0 - self.gamma)
         self.energy_limit_watts = camo_cfg.get("energy_limit_watts", 0.1) / (1.0 - self.gamma)
         
         # Environment properties. One of the N SUs is the relay-SU, so there are
