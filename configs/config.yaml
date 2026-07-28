@@ -18,9 +18,10 @@ network:
 
 channel:
   path_loss_exponent: 3.5
-  noise_power_dbm: -114.0
+  noise_power_dbm: -114.0   # Thermal noise floor for 10 MHz: N0 = kTB = -174 + 70 = -114 dBm
   fading_type: rayleigh
   csi_error_variance: 0.1
+  bandwidth_hz: 10.0e6      # System bandwidth B = 10 MHz (IEEE 802.22 / LTE sub-channel)
 
 training:
   gamma: 0.99
@@ -39,7 +40,7 @@ training:
 camo_td3:
   history_length: 10
   decoding_threshold: 0.1         # Lowered to make it easier for relay to decode
-  pu_rate_threshold: 0.5          # Lowered rate target for primary user so SU can interfere slightly
+  pu_rate_threshold: 5.0e6        # PU QoS floor in bits/s = 0.5 bits/s/Hz × 10 MHz
   interference_limit_dbm: -80.0   
   energy_limit_watts: 0.1         
   penalty_coef_inf: 1.0e10          # Penalty coefficient for interference constraint

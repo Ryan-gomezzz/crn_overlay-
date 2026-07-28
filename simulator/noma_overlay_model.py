@@ -19,11 +19,11 @@ Two-timeslot protocol
     - Relay forwards the superposed signal to SU destination.
     - Destination receives: y_d = √P_r · h_rd · x_r + √P_p · h_pd · x_p + n_d
 
-Per-user achievable rate (DF end-to-end):
+Per-user achievable rate (DF end-to-end, in bits/s):
     γ_sr_i  = (P_si · |h_sr_i|²) / (interference_after_SIC + P_p · |h_pr|² + N_0)
     γ_rd    = (P_r  · |h_rd|²)   / (P_p · |h_pd|² + N_0)
     γ_e2e_i = min(γ_sr_i, γ_rd)
-    R_i     = (1/2) · log2(1 + γ_e2e_i)
+    R_i     = B · (1/2) · log2(1 + γ_e2e_i)   [bits/s, B = system bandwidth in Hz]
 
 Interference constraint at PR:
     I_PR = Σ_i P_si · |h_sp_i|² + P_r · |h_rp|²  ≤  I_th
@@ -97,6 +97,11 @@ class NOMAConfig:
     # Channel Estimation Error (Imperfect CSI)
     csi_error_variance: float = 0.1
     path_loss_exponent: float = 3.5
+
+    # System bandwidth in Hz. Rates are reported in bits/s = B * (1/2) * log2(1 + SINR).
+    # Default 10 MHz matches the thermal noise floor at noise_power_dbm = -114 dBm
+    # (N0 = kTB = -174 + 10*log10(10e6) = -114 dBm).
+    bandwidth_hz: float = 10.0e6
 
     # Episode
     max_steps: int = 200
@@ -415,8 +420,9 @@ class NOMAOverlaySimulator:
         # ==============================================================
 
         gamma_e2e = np.minimum(gamma_sr, gamma_fwd) if M > 0 else np.zeros(0)
-        rates_src = 0.5 * np.log2(1.0 + gamma_e2e)          # shape (M,)
-        rate_own = 0.5 * math.log2(1.0 + gamma_own)
+        B = cfg.bandwidth_hz
+        rates_src = B * 0.5 * np.log2(1.0 + gamma_e2e)   # shape (M,)  [bits/s]
+        rate_own = B * 0.5 * math.log2(1.0 + gamma_own)  # [bits/s]
         rates = np.concatenate((rates_src, [rate_own]))     # shape (N,)
         sum_rate = float(rates.sum())
 
@@ -459,7 +465,7 @@ class NOMAOverlaySimulator:
         
         # Selection Combining at PR
         sinr_pu = max(snr_pu_direct, snr_pu_relayed)
-        pu_rate = 0.5 * math.log2(1.0 + sinr_pu)
+        pu_rate = cfg.bandwidth_hz * 0.5 * math.log2(1.0 + sinr_pu)  # [bits/s]
 
         # Primary BER: the PR selection-combines a single-hop direct link with a
         # two-hop DF-relayed link, i.e. it takes whichever path yields the lower

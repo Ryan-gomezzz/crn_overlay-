@@ -911,7 +911,7 @@ def handle_config(args: Any):
     print("\n[Replay Buffer & Constraints (Underlay/Overlay TD3)]")
     camo = cfg.get("camo_td3", {})
     print(f"  Sequence History Length: {camo.get('history_length')}")
-    print(f"  PU Rate QoS Target:      {camo.get('pu_rate_threshold')} bps/Hz")
+    print(f"  PU Rate QoS Target:      {camo.get('pu_rate_threshold')} bits/s")
     print(f"  Interference Limit:      {camo.get('interference_limit_dbm')} dBm")
     print(f"  Energy Limit:            {camo.get('energy_limit_watts')} Watts")
     

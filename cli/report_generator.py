@@ -62,11 +62,10 @@ def smooth_curve(points, factor=0.9):
             smoothed.append(point)
     return np.array(smoothed)
 
-# System bandwidth (Hz) used by the simulator to scale throughput.
-# Throughput logged in metrics.json is time_fraction * B * log2(1+SINR) in bits/s;
-# dividing by BANDWIDTH_HZ recovers spectral efficiency R = 1/2 * log2(1+SINR) in bits/s/Hz,
-# which is exactly the achievable secondary rate R_s in the reference diagram.
-BANDWIDTH_HZ = 1e6
+# System bandwidth (Hz). Used by legacy agents whose throughput is logged in bits/s;
+# MATD3 and CENT_NOMA_TD3 now emit rates in bits/s directly from the simulator
+# (B = 10 MHz is baked into NOMAConfig.bandwidth_hz), so their series need no scaling.
+BANDWIDTH_HZ = 10.0e6
 
 
 def _agent_series(runs, key):
@@ -267,10 +266,10 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         for agent in active:
             ep, th = _agent_series(metrics_by_agent[agent], "throughput_s")
             if th is not None:
-                se = th / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th
-                ax.plot(ep, smooth_curve(se, 0.9), color=COLORS[agent], linewidth=2, label=f"{SHORT_NAMES[agent]} (Sum Rate)")
+                # All agents now report bits/s directly from the simulator.
+                ax.plot(ep, smooth_curve(th, 0.9), color=COLORS[agent], linewidth=2, label=f"{SHORT_NAMES[agent]} (Sum Rate)")
         ax.set_xlabel('Episode')
-        ax.set_ylabel('Secondary Rate $R_s$ (bits/s/Hz)')
+        ax.set_ylabel('Secondary Sum-Rate $\\sum R_s$ (bits/s)')
         ax.set_title('Secondary User Sum-Rate Throughput vs Episode')
         ax.legend()
         pdf.savefig(fig)
@@ -281,10 +280,10 @@ def generate_pdf_report(experiments_dir: str, output_dir: str, agents=None, pref
         for agent in active:
             ep, th_p = _agent_series(metrics_by_agent[agent], "pu_throughput")
             if th_p is not None:
-                se_p = th_p / BANDWIDTH_HZ if agent not in ["MATD3", "CENT_NOMA_TD3"] else th_p
-                ax.plot(ep, smooth_curve(se_p, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
+                # All agents now report bits/s directly from the simulator.
+                ax.plot(ep, smooth_curve(th_p, 0.9), color=COLORS[agent], linewidth=2, label=SHORT_NAMES[agent])
         ax.set_xlabel('Episode')
-        ax.set_ylabel('Primary Rate $R_p$ (bits/s/Hz)')
+        ax.set_ylabel('Primary Rate $R_p$ (bits/s)')
         ax.set_title('Primary User Throughput vs Episode')
         ax.legend()
         pdf.savefig(fig)
